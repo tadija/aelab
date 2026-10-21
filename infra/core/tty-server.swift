@@ -316,6 +316,50 @@ func configEntries(repoRoot: String, relativePath: String, section wantedSection
 
     var entries: [(key: String, value: String)] = []
     var currentSection = ""
+    var arrayKey: String? = nil
+    var arrayValue = ""
+
+    func arrayItems(_ raw: String) -> [String] {
+        let trimmed = trim(raw)
+        let body = trimmed.hasPrefix("[") && trimmed.hasSuffix("]")
+            ? String(trimmed.dropFirst().dropLast())
+            : trimmed
+        var items: [String] = []
+        var index = body.startIndex
+        while index < body.endIndex {
+            let char = body[index]
+            guard char == "\"" || char == "'" else {
+                index = body.index(after: index)
+                continue
+            }
+            let quote = char
+            var value = ""
+            index = body.index(after: index)
+            while index < body.endIndex {
+                let next = body[index]
+                if next == quote {
+                    break
+                }
+                if quote == "\"" && next == "\\" {
+                    let escapedIndex = body.index(after: index)
+                    if escapedIndex < body.endIndex {
+                        value.append(body[escapedIndex])
+                        index = body.index(after: escapedIndex)
+                        continue
+                    }
+                }
+                value.append(next)
+                index = body.index(after: index)
+            }
+            if !value.isEmpty {
+                items.append(value)
+            }
+            if index < body.endIndex {
+                index = body.index(after: index)
+            }
+        }
+        return items
+    }
 
     for rawLine in raw.components(separatedBy: .newlines) {
         let line = trim(rawLine)
@@ -326,11 +370,34 @@ func configEntries(repoRoot: String, relativePath: String, section wantedSection
             currentSection = trim(String(line.dropFirst().dropLast()))
             continue
         }
+        if let key = arrayKey {
+            arrayValue += " \(line)"
+            if line.hasSuffix("]") {
+                for item in arrayItems(arrayValue) {
+                    entries.append((key: key, value: item))
+                }
+                arrayKey = nil
+                arrayValue = ""
+            }
+            continue
+        }
         guard currentSection == wantedSection, let separator = line.firstIndex(of: "=") else {
             continue
         }
         let key = trim(String(line[..<separator]))
-        let value = stripQuotes(String(line[line.index(after: separator)...]))
+        let rawValue = trim(String(line[line.index(after: separator)...]))
+        if rawValue.hasPrefix("[") {
+            if rawValue.hasSuffix("]") {
+                for item in arrayItems(rawValue) {
+                    entries.append((key: key, value: item))
+                }
+            } else {
+                arrayKey = key
+                arrayValue = rawValue
+            }
+            continue
+        }
+        let value = stripQuotes(rawValue)
         if !key.isEmpty && !value.isEmpty {
             entries.append((key: key, value: value))
         }
@@ -339,14 +406,35 @@ func configEntries(repoRoot: String, relativePath: String, section wantedSection
     return entries
 }
 
+func configSectionNames(repoRoot: String, relativePath: String) -> [String] {
+    let path = URL(fileURLWithPath: repoRoot).appendingPathComponent(relativePath).path
+    guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
+        return []
+    }
+    var names: [String] = []
+    for rawLine in raw.components(separatedBy: .newlines) {
+        let line = trim(rawLine)
+        guard !line.hasPrefix("#"), line.hasPrefix("["), line.hasSuffix("]"), line.count >= 3 else {
+            continue
+        }
+        let name = trim(String(line.dropFirst().dropLast()))
+        if !name.isEmpty && !names.contains(name) {
+            names.append(name)
+        }
+    }
+    return names
+}
+
 func repoConfigEntries(repoRoot: String, section wantedSection: String) -> [(key: String, value: String)] {
     configEntries(repoRoot: repoRoot, relativePath: repoConfigRelativePath, section: wantedSection)
 }
 
 func hostConfigValue(repoRoot: String, key wantedKey: String) -> String? {
-    configEntries(repoRoot: repoRoot, relativePath: hostConfigRelativePath, section: "")
-        .first { $0.key == wantedKey }?
-        .value
+    let values = configEntries(repoRoot: repoRoot, relativePath: hostConfigRelativePath, section: "")
+        .filter { $0.key == wantedKey }
+        .map(\.value)
+    guard !values.isEmpty else { return nil }
+    return values.joined(separator: "\n")
 }
 
 func readHTTPRequest(fd: Int32) -> Data? {
@@ -491,32 +579,28 @@ func parseEnvAssignmentValue(_ raw: String) -> String {
 }
 
 func hostProjects(repoRoot: String) -> [String: String] {
-    let hostConfigPath = URL(fileURLWithPath: repoRoot)
-        .appendingPathComponent("config/host.toml")
-        .path
-    guard let contents = try? String(contentsOfFile: hostConfigPath, encoding: .utf8) else {
-        return [:]
-    }
-
-    for rawLine in contents.split(separator: "\n", omittingEmptySubsequences: false) {
-        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard line.hasPrefix("AELAB_PROJECTS"), let separator = line.firstIndex(of: "=") else { continue }
-        let rawValue = String(line[line.index(after: separator)...])
-        let value = parseEnvAssignmentValue(rawValue)
-        var projects: [String: String] = [:]
-        for item in value.split(whereSeparator: { $0 == " " || $0 == "\t" }) {
-            let parts = item.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-            guard parts.count == 2 else { continue }
-            let title = String(parts[0])
-            let path = String(parts[1])
+    var projects: [String: String] = [:]
+    for entry in configEntries(repoRoot: repoRoot, relativePath: hostConfigRelativePath, section: "")
+        where entry.key == "AELAB_PROJECTS" {
+        let value = entry.value
+            .replacingOccurrences(of: "[", with: " ")
+            .replacingOccurrences(of: "]", with: " ")
+            .replacingOccurrences(of: ",", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawItems = value.contains("\n")
+            ? value.components(separatedBy: .newlines)
+            : value.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        for item in rawItems {
+            let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let separator = trimmed.firstIndex(of: "=") else { continue }
+            let title = String(trimmed[..<separator])
+            let path = String(trimmed[trimmed.index(after: separator)...])
             if !title.isEmpty && !path.isEmpty {
                 projects[title] = path
             }
         }
-        return projects
     }
-
-    return [:]
+    return projects
 }
 
 func normalizedTerminalSegments(for requestPath: String) -> [String] {
@@ -1137,6 +1221,269 @@ func listTmuxSessions() -> [TmuxSession] {
 func jsonResponseObject(_ object: [String: Any], status: String = "200 OK", headOnly: Bool = false) -> Data {
     let body = (try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])) ?? Data("{}".utf8)
     return response(status: status, contentType: "application/json; charset=utf-8", body: body, headOnly: headOnly)
+}
+
+// MARK: - Creating projects, agents and services from the dashboard
+
+/// Appends `value` to a whitespace-separated list stored under `key` in the root
+/// section of config/host.toml, preserving comments and the rest of the file.
+func appendToHostConfigList(repoRoot: String, key: String, value: String) -> String? {
+    let url = URL(fileURLWithPath: repoRoot).appendingPathComponent(hostConfigRelativePath)
+    guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
+        return "cannot read \(hostConfigRelativePath)"
+    }
+
+    var lines = contents.components(separatedBy: "\n")
+    var inRootSection = true
+    var updated = false
+    var rootSectionEnd = lines.count
+
+    for (index, line) in lines.enumerated() {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") && trimmed.count >= 3 {
+            if inRootSection {
+                rootSectionEnd = index
+                inRootSection = false
+            }
+            continue
+        }
+        guard inRootSection, let equalsIndex = line.firstIndex(of: "=") else { continue }
+        guard line[..<equalsIndex].trimmingCharacters(in: .whitespaces) == key else { continue }
+
+        let rawValue = String(line[line.index(after: equalsIndex)...]).trimmingCharacters(in: .whitespaces)
+        var existing = rawValue
+        if existing.hasPrefix("\"") && existing.hasSuffix("\"") && existing.count >= 2 {
+            existing = String(existing.dropFirst().dropLast())
+        }
+        let items = existing
+            .replacingOccurrences(of: ",", with: " ")
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .map(String.init)
+        if items.contains(value) {
+            return "\(key) already contains \(value)"
+        }
+        lines[index] = "\(key) = \"\((items + [value]).joined(separator: " "))\""
+        updated = true
+        break
+    }
+
+    if !updated {
+        // The key is absent: add it at the end of the root section.
+        var insertAt = rootSectionEnd
+        while insertAt > 0 && lines[insertAt - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+            insertAt -= 1
+        }
+        lines.insert("\(key) = \"\(value)\"", at: insertAt)
+    }
+
+    do {
+        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    } catch {
+        return "cannot write \(hostConfigRelativePath): \(error.localizedDescription)"
+    }
+    return nil
+}
+
+func tomlBasicString(_ value: String) -> String {
+    "\"" + value
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+        .replacingOccurrences(of: "\n", with: "\\n") + "\""
+}
+
+func appendProjectToHostConfig(repoRoot: String, title: String, path: String) -> String? {
+    let url = URL(fileURLWithPath: repoRoot).appendingPathComponent(hostConfigRelativePath)
+    guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
+        return "cannot read \(hostConfigRelativePath)"
+    }
+
+    let newEntry = "\(title)=\(path)"
+    let existing = hostProjects(repoRoot: repoRoot)
+    if existing[title] != nil {
+        return "AELAB_PROJECTS already contains \(title)"
+    }
+
+    let entries = (existing.map { "\($0.key)=\($0.value)" } + [newEntry]).sorted()
+    let replacementLines = ["AELAB_PROJECTS = ["] +
+        entries.map { "  \(tomlBasicString($0))," } +
+        ["]"]
+
+    var lines = contents.components(separatedBy: "\n")
+    var inRootSection = true
+    var rootSectionEnd = lines.count
+    var replaced = false
+    var index = 0
+
+    while index < lines.count {
+        let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") && trimmed.count >= 3 {
+            if inRootSection {
+                rootSectionEnd = index
+                inRootSection = false
+            }
+            index += 1
+            continue
+        }
+        guard inRootSection,
+              let equalsIndex = lines[index].firstIndex(of: "="),
+              lines[index][..<equalsIndex].trimmingCharacters(in: .whitespaces) == "AELAB_PROJECTS" else {
+            index += 1
+            continue
+        }
+
+        var end = index + 1
+        if trimmed.contains("[") {
+            while end < lines.count && !lines[end].trimmingCharacters(in: .whitespaces).hasPrefix("]") {
+                end += 1
+            }
+            if end < lines.count {
+                end += 1
+            }
+        }
+        lines.replaceSubrange(index..<end, with: replacementLines)
+        replaced = true
+        break
+    }
+
+    if !replaced {
+        var insertAt = rootSectionEnd
+        while insertAt > 0 && lines[insertAt - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+            insertAt -= 1
+        }
+        lines.insert(contentsOf: replacementLines, at: insertAt)
+    }
+
+    do {
+        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    } catch {
+        return "cannot write \(hostConfigRelativePath): \(error.localizedDescription)"
+    }
+    return nil
+}
+
+func jsonPayload(_ body: Data) -> [String: Any]? {
+    try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+}
+
+func trimmedString(_ payload: [String: Any], _ key: String) -> String {
+    (payload[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+}
+
+func createProject(repoRoot: String, body: Data) -> (status: String, object: [String: Any]) {
+    guard let payload = jsonPayload(body) else {
+        return ("400 Bad Request", ["ok": false, "error": "bad payload"])
+    }
+    let rawPath = trimmedString(payload, "path")
+
+    guard rawPath.hasPrefix("/"), !rawPath.contains("\n"), !rawPath.contains("\"") else {
+        return ("400 Bad Request", ["ok": false, "error": "project path must be absolute"])
+    }
+    // The list key is the directory name, so the path is the only thing to ask for.
+    let path = URL(fileURLWithPath: rawPath).standardizedFileURL.path
+    let title = URL(fileURLWithPath: path).lastPathComponent
+    guard !title.isEmpty, title != "/", title.rangeOfCharacter(from: CharacterSet(charactersIn: " \t=\"'\n")) == nil else {
+        return ("400 Bad Request", ["ok": false, "error": "cannot derive a project name from that path"])
+    }
+    guard hostProjects(repoRoot: repoRoot)[title] == nil else {
+        return ("409 Conflict", ["ok": false, "error": "project \(title) already exists"])
+    }
+
+    var isDirectory: ObjCBool = false
+    if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) {
+        guard isDirectory.boolValue else {
+            return ("409 Conflict", ["ok": false, "error": "path exists and is not a directory"])
+        }
+    } else {
+        do {
+            try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        } catch {
+            return ("500 Internal Server Error", ["ok": false, "error": "cannot create \(path): \(error.localizedDescription)"])
+        }
+    }
+
+    if let error = appendProjectToHostConfig(repoRoot: repoRoot, title: title, path: path) {
+        return ("500 Internal Server Error", ["ok": false, "error": error])
+    }
+    // No "path" key here: that means a URL to open, and this is a filesystem path.
+    return ("200 OK", ["ok": true, "title": title, "dir": path])
+}
+
+func createAgent(repoRoot: String, body: Data) -> (status: String, object: [String: Any]) {
+    guard let payload = jsonPayload(body) else {
+        return ("400 Bad Request", ["ok": false, "error": "bad payload"])
+    }
+    let id = trimmedString(payload, "id")
+    let kind = trimmedString(payload, "kind")
+    guard id.range(of: "^[0-9]{3}$", options: .regularExpression) != nil else {
+        return ("400 Bad Request", ["ok": false, "error": "agent id must be 3 digits"])
+    }
+    let kinds = configSectionNames(repoRoot: repoRoot, relativePath: "config/agents.toml")
+    guard kinds.contains(kind) else {
+        return ("400 Bad Request", ["ok": false, "error": "unknown agent kind: \(kind)"])
+    }
+
+    let agentsRoot = URL(fileURLWithPath: repoRoot).appendingPathComponent("agents", isDirectory: true)
+    let existing = ((try? FileManager.default.contentsOfDirectory(atPath: agentsRoot.path)) ?? [])
+    guard !existing.contains(where: { $0.split(separator: "-").first.map(String.init) == id }) else {
+        return ("409 Conflict", ["ok": false, "error": "agent id \(id) already exists"])
+    }
+
+    let name = "\(id)-\(kind)"
+    let agentURL = agentsRoot.appendingPathComponent(name, isDirectory: true)
+    do {
+        try FileManager.default.createDirectory(at: agentURL, withIntermediateDirectories: true)
+        let gitkeep = agentURL.appendingPathComponent(".gitkeep")
+        if !FileManager.default.fileExists(atPath: gitkeep.path) {
+            FileManager.default.createFile(atPath: gitkeep.path, contents: nil)
+        }
+    } catch {
+        return ("500 Internal Server Error", ["ok": false, "error": "cannot create agent dir: \(error.localizedDescription)"])
+    }
+
+    if let error = appendToHostConfigList(repoRoot: repoRoot, key: "AELAB_AGENTS", value: id) {
+        return ("500 Internal Server Error", ["ok": false, "error": error])
+    }
+
+    // `ae make` execs the agent's own interactive setup CLI, so it has to run
+    // attached to a terminal rather than as a fire-and-forget child process.
+    var sessionPath: String? = nil
+    if let tmuxPath = resolveTmuxPath() {
+        let sessionName = "make-\(name)"
+        let aePath = URL(fileURLWithPath: repoRoot).appendingPathComponent("ae").path
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tmuxPath)
+        process.arguments = tmuxSocketArguments()
+            + ["new-session", "-d", "-s", sessionName, "-c", repoRoot, aePath, "make", name]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        if (try? process.run()) != nil {
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
+                sessionPath = "/tty/tmux/\(urlEncodePathSegment(sessionName))/"
+            }
+        }
+    }
+
+    var result: [String: Any] = ["ok": true, "agent": name]
+    if let sessionPath {
+        result["path"] = sessionPath
+    }
+    return ("200 OK", result)
+}
+
+func createService(repoRoot: String, body: Data) -> (status: String, object: [String: Any]) {
+    guard let payload = jsonPayload(body) else {
+        return ("400 Bad Request", ["ok": false, "error": "bad payload"])
+    }
+    let id = trimmedString(payload, "id")
+    let known = configSectionNames(repoRoot: repoRoot, relativePath: "config/services.toml")
+    guard known.contains(id) else {
+        return ("400 Bad Request", ["ok": false, "error": "unknown service: \(id)"])
+    }
+    if let error = appendToHostConfigList(repoRoot: repoRoot, key: "AELAB_SERVICES", value: id) {
+        return ("409 Conflict", ["ok": false, "error": error])
+    }
+    return ("200 OK", ["ok": true, "service": id])
 }
 
 func createTmuxWindow(repoRoot: String, body: Data) -> (status: String, object: [String: Any]) {
@@ -1784,6 +2131,28 @@ func handleConnection(fd: Int32, config: Config, registry: SessionRegistry) {
 
     if cleanPath == "/sessions" || cleanPath == "/tty/sessions" {
         sendAll(fd: fd, data: response(status: "200 OK", contentType: "application/json; charset=utf-8", body: sessionsJSON(registry: registry), headOnly: headOnly))
+        return
+    }
+
+    if cleanPath.hasPrefix("/new/") || cleanPath.hasPrefix("/tty/new/") {
+        guard request.method == "POST" else {
+            sendAll(fd: fd, data: response(status: "405 Method Not Allowed", contentType: "text/plain; charset=utf-8", body: Data("method not allowed\n".utf8), headOnly: headOnly))
+            return
+        }
+        let kind = String(cleanPath.split(separator: "/").last ?? "")
+        let result: (status: String, object: [String: Any])
+        switch kind {
+        case "projects":
+            result = createProject(repoRoot: config.repoRoot, body: request.body)
+        case "agents":
+            result = createAgent(repoRoot: config.repoRoot, body: request.body)
+        case "services":
+            result = createService(repoRoot: config.repoRoot, body: request.body)
+        default:
+            result = ("404 Not Found", ["ok": false, "error": "unknown section: \(kind)"])
+        }
+        log("new \(kind): \(result.status)")
+        sendAll(fd: fd, data: jsonResponseObject(result.object, status: result.status, headOnly: headOnly))
         return
     }
 

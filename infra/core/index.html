@@ -163,6 +163,8 @@
     .terminal-quick-action { vertical-align: middle; margin-left: 2px; }
     .action-menu { position: relative; display: inline-flex; }
     .action-menu > summary { list-style: none; }
+    .action-menu > summary .icon-svg { transition: transform 160ms ease; }
+    .action-menu[open] > summary .icon-svg { transform: rotate(180deg); }
     .action-menu > summary::-webkit-details-marker { display: none; }
     .action-menu-panel { position: absolute; z-index: 5; top: calc(100% + 6px); right: 0; min-width: 180px; padding: 6px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18); display: grid; gap: 2px; }
     .host-action-menu .action-menu-panel { min-width: 180px; max-width: min(260px, calc(100vw - 48px)); }
@@ -184,6 +186,29 @@
     .status-unavailable { background: var(--status-unavailable-bg); color: var(--status-unavailable-text); }
     .status-unknown { background: var(--status-unknown-bg); color: var(--status-unknown-text); }
     .status-yolo { background: #fee4e2; color: #b42318; }
+    .index-section h2 { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+    .section-new { width: 24px; height: 24px; flex: 0 0 auto; }
+    .section-new .icon-svg { width: 14px; height: 14px; }
+    .section-new:hover { transform: none; background: var(--control-active-bg); border-color: var(--control-active-bg); color: var(--control-active-text); }
+    .new-dialog { width: min(420px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--panel-border); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28); }
+    .new-dialog::backdrop { background: rgba(15, 23, 42, 0.42); }
+    .new-dialog form { display: grid; gap: 14px; padding: 20px; margin: 0; }
+    .new-dialog h3 { margin: 0; font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .new-field { display: grid; gap: 5px; }
+    .new-field[hidden] { display: none; }
+    .new-field label { color: var(--muted); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .new-field input, .new-field select { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--panel-border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.95rem; }
+    .new-field input:focus-visible, .new-field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .new-hint { color: var(--muted); font-size: 0.82rem; margin: 0; overflow-wrap: anywhere; }
+    .new-hint code { font-size: 0.82rem; }
+    .new-error { color: #b42318; font-size: 0.85rem; margin: 0; overflow-wrap: anywhere; }
+    .new-error[hidden] { display: none; }
+    .new-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .new-button { appearance: none; border: 1px solid var(--panel-border); background: var(--control-bg); color: var(--text); padding: 8px 16px; border-radius: 999px; font: inherit; font-weight: 600; cursor: pointer; }
+    .new-button:hover { color: var(--accent); }
+    .new-button-primary { background: var(--control-active-bg); border-color: var(--control-active-bg); color: var(--control-active-text); }
+    .new-button-primary:hover { color: var(--control-active-text); opacity: 0.9; }
+    .new-button[disabled] { opacity: 0.55; cursor: progress; }
     @media (max-width: 640px) {
     .controls { margin-left: auto; }
     }
@@ -205,7 +230,7 @@
         <p><code>__HOST_NAME__</code></p>
         <details class="action-menu host-action-menu" id="host-terminal-menu">
           <summary class="icon-button row-action-button" aria-label="Actions" title="Actions">
-            <svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
           </summary>
           <div class="action-menu-panel" id="host-terminal-menu-panel">
             <div class="action-menu-section">
@@ -234,7 +259,27 @@ __AGENT_LINKS_HTML__
     <div class="meta">
       <p><a id="reset-look" href="" aria-label="Reset page look" title="Reset page look">Generated</a> <span id="generated-meta-label">at</span> <button class="meta-toggle" id="generated-meta-toggle" type="button" aria-label="Show commit hash" title="Show commit hash" data-generated-at="__GENERATED_AT__" data-generated-commit="__GENERATED_COMMIT__"><code>__GENERATED_AT__</code></button>.</p>
     </div>
+    <dialog class="new-dialog" id="new-dialog">
+      <form id="new-form" method="dialog">
+        <h3 id="new-dialog-title">New</h3>
+        <div class="new-field" id="new-field-a">
+          <label for="new-input-a">Name</label>
+          <input id="new-input-a" name="a" type="text" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="new-field" id="new-field-select">
+          <label for="new-select">Kind</label>
+          <select id="new-select" name="kind"></select>
+        </div>
+        <p class="new-hint" id="new-hint"></p>
+        <p class="new-error" id="new-error" role="alert" hidden></p>
+        <div class="new-actions">
+          <button class="new-button" type="button" id="new-cancel">Cancel</button>
+          <button class="new-button new-button-primary" type="submit" id="new-submit">Create</button>
+        </div>
+      </form>
+    </dialog>
   </main>
+  <script type="application/json" id="new-dialog-data">__NEW_DIALOG_DATA__</script>
   <script>
     (() => {
       const root = document.documentElement;
@@ -242,7 +287,7 @@ __AGENT_LINKS_HTML__
       const tintPicker = document.getElementById('active-tint-picker');
       const resetLook = document.getElementById('reset-look');
       const sections = Array.from(document.querySelectorAll('.index-section'));
-      const actionMenus = Array.from(document.querySelectorAll('.action-menu'));
+      const actionMenus = () => Array.from(document.querySelectorAll('.action-menu'));
       const tailscaleRow = document.querySelector('.tailscale-row');
       const hostList = document.querySelector('.segmented');
       const pinnedSection = document.getElementById('pinned-sessions-section');
@@ -437,7 +482,7 @@ __AGENT_LINKS_HTML__
       }
 
       const closeActionMenus = (except = null) => {
-        for (const menu of actionMenus) {
+        for (const menu of actionMenus()) {
           if (menu !== except) {
             menu.open = false;
           }
@@ -457,19 +502,26 @@ __AGENT_LINKS_HTML__
         }
       };
 
-      for (const menu of actionMenus) {
-        menu.addEventListener('toggle', () => {
-          if (menu.open) {
-            closeActionMenus(menu);
-            clampMenuPanelIntoView(menu);
-          }
-        });
-        menu.addEventListener('click', (event) => {
-          if (event.target.closest('.action-menu-item')) {
-            menu.open = false;
-          }
-        });
-      }
+      // Rows can be swapped in after a "new" action, so bind on demand and skip
+      // menus that already carry listeners.
+      const wireActionMenus = () => {
+        for (const menu of actionMenus()) {
+          if (menu.dataset.menuWired === 'true') continue;
+          menu.dataset.menuWired = 'true';
+          menu.addEventListener('toggle', () => {
+            if (menu.open) {
+              closeActionMenus(menu);
+              clampMenuPanelIntoView(menu);
+            }
+          });
+          menu.addEventListener('click', (event) => {
+            if (event.target.closest('.action-menu-item')) {
+              menu.open = false;
+            }
+          });
+        }
+      };
+      wireActionMenus();
 
       document.addEventListener('click', (event) => {
         const tmuxWindowItem = event.target.closest('[data-tmux-window-session]');
@@ -678,6 +730,34 @@ __AGENT_LINKS_HTML__
         scrollActiveHostIntoView();
       };
 
+      // The index page is re-rendered by the http-server on its own short
+      // interval, so after creating something we poll it until the new row
+      // shows up and swap in just that section instead of reloading the page.
+      window.aelabRefreshSection = async (id, expect) => {
+        const target = document.querySelector(`.index-section[data-section="${id}"] ul`);
+        if (!target) return false;
+        for (let attempt = 0; attempt < 60; attempt += 1) {
+          try {
+            const response = await fetch('/', { cache: 'no-store' });
+            const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const fresh = doc.querySelector(`.index-section[data-section="${id}"] ul`);
+            if (fresh && (!expect || fresh.textContent.includes(expect))) {
+              target.innerHTML = fresh.innerHTML;
+              wireActionMenus();
+              refreshSessions();
+              return true;
+            }
+          } catch (error) {
+            // Transient fetch failure; the next attempt covers it. Logged so a
+            // persistent one is diagnosable instead of looking like a hang.
+            console.warn('aelab: section refresh attempt failed', error);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        console.warn(`aelab: ${id} section did not pick up "${expect}"; reloading`);
+        return false;
+      };
+
       let refreshSessionsTimer = null;
       const refreshSessions = () => {
         fetch('/tty/sessions', { cache: 'no-store' })
@@ -705,6 +785,278 @@ __AGENT_LINKS_HTML__
         if (!document.hidden) {
           scheduleRefreshSessions();
         }
+      });
+    })();
+  </script>
+  <script>
+    (() => {
+      const dialog = document.getElementById('new-dialog');
+      const form = document.getElementById('new-form');
+      if (!dialog || !form) return;
+
+      let data = {};
+      try {
+        data = JSON.parse(document.getElementById('new-dialog-data')?.textContent || '{}');
+      } catch (_) {
+        data = {};
+      }
+      const agentKinds = Array.isArray(data.agentKinds) ? data.agentKinds : [];
+      const agentDirs = Array.isArray(data.agentDirs) ? data.agentDirs : [];
+      const serviceIds = Array.isArray(data.serviceIds) ? data.serviceIds : [];
+      const enabledServices = Array.isArray(data.enabledServices) ? data.enabledServices : [];
+      const projectTitles = Array.isArray(data.projectTitles) ? data.projectTitles : [];
+      const agentPorts = data.agentPorts && typeof data.agentPorts === 'object' ? data.agentPorts : {};
+      const servicePorts = data.servicePorts && typeof data.servicePorts === 'object' ? data.servicePorts : {};
+      const portAgentKinds = Array.isArray(data.portAgentKinds) ? data.portAgentKinds : [];
+      const portServiceIds = Array.isArray(data.portServiceIds) ? data.portServiceIds : [];
+      const usedPorts = new Map();
+      for (const [id, port] of Object.entries(agentPorts)) usedPorts.set(String(port), `agent ${id}`);
+      for (const [id, port] of Object.entries(servicePorts)) usedPorts.set(String(port), `service ${id}`);
+      const usedAgentIds = new Set(agentDirs.map((name) => String(name).split('-')[0]));
+
+      const dialogTitle = document.getElementById('new-dialog-title');
+      const fieldA = document.getElementById('new-field-a');
+      const fieldSelect = document.getElementById('new-field-select');
+      const inputA = document.getElementById('new-input-a');
+      const select = document.getElementById('new-select');
+      const labelA = fieldA.querySelector('label');
+      const labelSelect = fieldSelect.querySelector('label');
+      const hint = document.getElementById('new-hint');
+      const errorBox = document.getElementById('new-error');
+      const submit = document.getElementById('new-submit');
+      const cancel = document.getElementById('new-cancel');
+
+      let spec = null;
+
+      const setOptions = (values) => {
+        select.innerHTML = '';
+        for (const value of values) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          select.append(option);
+        }
+      };
+
+      const nextFreeAgentId = () => {
+        for (let candidate = 1; candidate < 1000; candidate += 1) {
+          const padded = String(candidate).padStart(3, '0');
+          if (!usedAgentIds.has(padded)) return padded;
+        }
+        return '';
+      };
+
+      const basename = (value) => String(value).replace(/\/+$/, '').split('/').pop() || '';
+
+      // Only kinds/services that actually take a port get the field.
+      const portApplies = () => {
+        if (spec?.section === 'agents') return portAgentKinds.includes(select.value);
+        if (spec?.section === 'services') return portServiceIds.includes(select.value);
+        return false;
+      };
+
+      const suggestedPort = () => {
+        if (spec?.section === 'services') return servicePorts[select.value] || '';
+        // Agent ports are grouped per kind in steps of 10; follow that.
+        let highest = 0;
+        for (const dir of agentDirs) {
+          const parts = String(dir).split('-');
+          const id = parts.shift();
+          if (parts.join('-') !== select.value) continue;
+          const port = Number(agentPorts[id]);
+          if (Number.isFinite(port) && port > highest) highest = port;
+        }
+        return highest ? String(highest + 10) : '';
+      };
+
+      // Ports live in config/repo.toml, which is git-tracked and shared by every
+      // host, so the dialog only advises a port; you add it yourself.
+      const portAdvice = () => {
+        if (!portApplies()) return '';
+        if (spec?.section === 'services') {
+          const existing = servicePorts[select.value];
+          return existing
+            ? ` \u00b7 uses port ${existing}`
+            : ` \u00b7 needs a port in [service-ports]`;
+        }
+        const suggestion = suggestedPort();
+        return suggestion
+          ? ` \u00b7 free port for ${select.value}: ${suggestion} (add to [agent-ports])`
+          : ` \u00b7 add a port to [agent-ports] if it needs one`;
+      };
+
+      const specs = {
+        projects: {
+          title: 'New project',
+          setup() {
+            fieldA.hidden = false;
+            fieldSelect.hidden = true;
+            labelA.textContent = 'Path';
+            inputA.placeholder = '/Users/you/Developer/my-project';
+            inputA.value = '';
+          },
+          focus: () => inputA,
+          hint() {
+            const path = inputA.value.trim();
+            if (!path) return 'Creates the directory on this host and adds it to AELAB_PROJECTS.';
+            const name = basename(path);
+            return name ? `mkdir -p ${path} \u2192 listed as "${name}"` : `mkdir -p ${path}`;
+          },
+          validate() {
+            const path = inputA.value.trim();
+            if (!path) return 'Path is required.';
+            if (!path.startsWith('/')) return 'Path must be absolute.';
+            const name = basename(path);
+            if (!name) return 'Path must end in a directory name.';
+            if (/[\s=]/.test(name)) return 'Directory name cannot contain spaces or "=".';
+            if (projectTitles.includes(name)) return `Project "${name}" already exists.`;
+            return null;
+          },
+          payload: () => ({ path: inputA.value.trim() }),
+        },
+        agents: {
+          title: 'New agent',
+          setup() {
+            fieldA.hidden = false;
+            fieldSelect.hidden = false;
+            labelA.textContent = 'ID';
+            labelSelect.textContent = 'Kind';
+            inputA.placeholder = '001';
+            inputA.value = nextFreeAgentId();
+            setOptions(agentKinds);
+          },
+          focus: () => inputA,
+          hint() {
+            const id = inputA.value.trim();
+            const kind = select.value;
+            if (!/^\d{3}$/.test(id) || !kind) return 'Runs ./ae make in a tmux session so you can complete setup.';
+            return `./ae make ${id}-${kind}${portAdvice()}`;
+          },
+          validate() {
+            const id = inputA.value.trim();
+            if (!/^\d{3}$/.test(id)) return 'ID must be exactly 3 digits, e.g. 001.';
+            if (usedAgentIds.has(id)) return `Agent id ${id} already exists.`;
+            if (!select.value) return 'Pick an agent kind.';
+            return null;
+          },
+          payload: () => ({ id: inputA.value.trim(), kind: select.value }),
+        },
+        services: {
+          title: 'New service',
+          setup() {
+            fieldA.hidden = true;
+            fieldSelect.hidden = false;
+            labelSelect.textContent = 'Service';
+            setOptions(serviceIds.filter((id) => !enabledServices.includes(id)));
+          },
+          focus: () => select,
+          hint() {
+            if (!select.value) return 'Every service in config/services.toml is already enabled on this host.';
+            return `Adds ${select.value} to AELAB_SERVICES${portAdvice()}. Install it with ./ae infra install ${select.value}.`;
+          },
+          validate() {
+            if (!select.value) return 'No service available to add.';
+            return null;
+          },
+          payload: () => ({ id: select.value }),
+        },
+      };
+
+      const showError = (message) => {
+        errorBox.textContent = message || '';
+        errorBox.hidden = !message;
+      };
+
+      const syncHint = () => {
+        hint.textContent = spec ? spec.hint() : '';
+      };
+
+      const openDialog = (section) => {
+        spec = specs[section];
+        if (!spec) return;
+        spec.section = section;
+        dialogTitle.textContent = spec.title;
+        showError('');
+        submit.disabled = false;
+        submit.textContent = 'Create';
+        spec.setup();
+        syncHint();
+        dialog.showModal();
+        spec.focus().focus();
+      };
+
+      document.querySelectorAll('[data-new-section]').forEach((button) => {
+        button.addEventListener('click', () => openDialog(button.dataset.newSection));
+      });
+
+      inputA.addEventListener('input', () => {
+        showError('');
+        syncHint();
+      });
+      select.addEventListener('change', () => {
+        showError('');
+        syncHint();
+      });
+      cancel.addEventListener('click', () => dialog.close());
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (!spec) return;
+        const problem = spec.validate();
+        if (problem) {
+          showError(problem);
+          return;
+        }
+        const section = spec.section;
+        submit.disabled = true;
+        submit.textContent = 'Working…';
+        showError('');
+        fetch(`/tty/new/${section}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(spec.payload()),
+          cache: 'no-store',
+        })
+          .then((response) => response.text().then((text) => {
+            let body = null;
+            try {
+              body = JSON.parse(text);
+            } catch (_) {
+              // An older tty-server that predates /tty/new/* answers with the
+              // terminal page instead, so say that rather than "failed (200)".
+              throw new Error(`${section} endpoint not available on this host \u2014 restart core-tty to pick up the current build`);
+            }
+            return { response, body };
+          }))
+          .then(({ response, body }) => {
+            if (!response.ok || body.ok !== true) {
+              throw new Error(body.error || `request failed (${response.status})`);
+            }
+            // Only agents hand back a URL (their tmux setup session); a project
+            // reply carries a filesystem path, which is not something to open.
+            if (body.path) {
+              window.open(body.path, '_blank', 'noreferrer');
+            }
+            dialog.close();
+            const refresh = window.aelabRefreshSection;
+            if (!refresh) {
+              window.location.reload();
+              return;
+            }
+            // The swap is an optimisation, not the contract: whenever it cannot
+            // confirm the new row, fall back to a reload so the page always
+            // ends up showing what was just created.
+            return refresh(section, body.title || body.name || body.service || '')
+              .then((swapped) => {
+                if (!swapped) window.location.reload();
+              })
+              .catch(() => window.location.reload());
+          })
+          .catch((error) => {
+            submit.disabled = false;
+            submit.textContent = 'Create';
+            showError(String(error.message || error));
+          });
       });
     })();
   </script>

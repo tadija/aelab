@@ -179,14 +179,17 @@ AELAB_USER = "agent"
 AELAB_GROUP = "staff"
 AELAB_ROOT = "/Users/Shared/aelab"
 AELAB_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-AELAB_PROJECTS = "aelab=/Users/Shared/aelab app=/Users/Shared/aelab/shared/projects/app"
+AELAB_PROJECTS = [
+  "aelab=/Users/Shared/aelab",
+  "app=/Users/Shared/aelab/shared/projects/app",
+]
 ```
 
 ### Host fields
 
 - `AELAB_AGENTS` lists the agent ids assigned to this host
 - `AELAB_SERVICES` lists the shared services assigned to this host
-- `AELAB_PROJECTS` lists project rows as `title=/absolute/path` pairs; `/tty/<title>/` opens a shell in that path, and the project action menu opens supported interactive agent TUIs in that same path
+- `AELAB_PROJECTS` lists project rows as `title=/absolute/path` strings; `/tty/<title>/` opens a shell in that path, and the project action menu opens supported interactive agent TUIs in that same path
 - `AELAB_HOST` selects the active segmented-nav host for the generated Caddy landing page
 - `AELAB_USER` is the account that should own and run the managed processes
 - `AELAB_GROUP` is the shared group used for the repo, such as `staff` on macOS or the service user's primary group on Linux

@@ -596,7 +596,7 @@ render_action_menu_html() {
   cat <<EOF
 <details class="action-menu">
           <summary class="icon-button row-action-button" aria-label="Actions" title="Actions">
-            <svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <svg class="icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
           </summary>
           <div class="action-menu-panel">
 ${sections_html}          </div>
@@ -638,9 +638,7 @@ render_project_links_html() {
 
   [[ -n "$raw" ]] || return 0
 
-  # shellcheck disable=SC2206
-  local -a items=($raw)
-  for item in "${items[@]}"; do
+  while IFS= read -r item; do
     [[ "$item" == *=* ]] || continue
     title="${item%%=*}"
     path="${item#*=}"
@@ -650,18 +648,32 @@ render_project_links_html() {
     title_html="<a href=\"$(html_escape "$project_url")\" target=\"_blank\" rel=\"noreferrer\">$(html_escape "$title")</a>"
     details_html="<span class=\"detail-path\">path: <code>$(html_escape "$path")</code></span>"
     render_index_row_html "$title_html" "" "" "$details_html" "$actions_html"
-  done
+  done < <(
+    if [[ "$raw" == *$'\n'* ]]; then
+      printf '%s\n' "$raw"
+    else
+      # Backward compatibility for the old pre-TOML compact string format.
+      printf '%s\n' $raw
+    fi
+  )
 }
 
 render_index_section_html() {
   local section_id="$1"
   local title="$2"
   local links_html="$3"
+  local section_id_html
+  local new_button_html=""
 
-  [[ -n "$links_html" ]] || return 0
+  section_id_html="$(html_escape "$section_id")"
+  case "$section_id" in
+    projects|agents|services)
+      new_button_html="<button class=\"icon-button row-action-button section-new\" type=\"button\" data-new-section=\"${section_id_html}\" aria-label=\"New ${section_id_html} entry\" title=\"New ${section_id_html} entry\"><svg class=\"icon-svg\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M12 5v14\"/><path d=\"M5 12h14\"/></svg></button>"
+      ;;
+  esac
   cat <<EOF
-    <section class="index-section" data-section="$(html_escape "$section_id")">
-      <h2><button class="section-toggle" type="button" aria-expanded="true"><span class="section-caret">▾</span><span>$(html_escape "$title")</span></button></h2>
+    <section class="index-section" data-section="${section_id_html}">
+      <h2><button class="section-toggle" type="button" aria-expanded="true"><span class="section-caret">▾</span><span>$(html_escape "$title")</span></button>${new_button_html}</h2>
       <ul>
 ${links_html}
       </ul>
@@ -694,6 +706,105 @@ tailscale_only_enabled() {
   esac
 }
 
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+json_string_array() {
+  local item
+  local out=""
+  while IFS= read -r item; do
+    [[ -n "$item" ]] || continue
+    [[ -n "$out" ]] && out+=","
+    out+="\"$(json_escape "$item")\""
+  done
+  printf '[%s]' "$out"
+}
+
+existing_agent_dir_names() {
+  local entry
+  local dir
+  dir="$(repo_root)/agents"
+  [[ -d "$dir" ]] || return 0
+  for entry in "$dir"/*; do
+    [[ -d "$entry" ]] || continue
+    printf '%s\n' "${entry##*/}"
+  done
+}
+
+existing_project_titles() {
+  local raw="${AELAB_PROJECTS:-}"
+  local item
+  [[ -n "$raw" ]] || return 0
+  while IFS= read -r item; do
+    [[ "$item" == *=* ]] || continue
+    printf '%s\n' "${item%%=*}"
+  done < <(
+    if [[ "$raw" == *$'\n'* ]]; then
+      printf '%s\n' "$raw"
+    else
+      # Backward compatibility for the old pre-TOML compact string format.
+      printf '%s\n' $raw
+    fi
+  )
+}
+
+enabled_service_ids() {
+  local item
+  local -a items=()
+  # shellcheck disable=SC2206
+  items=(${AELAB_SERVICES:-})
+  for item in "${items[@]}"; do
+    [[ -n "$item" ]] && printf '%s\n' "${item//,/}"
+  done
+}
+
+json_string_object() {
+  local key
+  local value
+  local out=""
+  while IFS=$'\t' read -r key value; do
+    [[ -n "$key" ]] || continue
+    [[ -n "$out" ]] && out+=","
+    out+="\"$(json_escape "$key")\":\"$(json_escape "$value")\""
+  done
+  printf '{%s}' "$out"
+}
+
+# Agent kinds that accept a --port style flag, and services whose definition
+# interpolates __SERVICE_PORT__; only these get a port field in the dialog.
+sections_with_key() {
+  local file="$1"
+  local needle="$2"
+  [[ -f "$file" ]] || return 0
+  awk -v needle="$needle" '
+    /^[[:space:]]*\[[^][]+\][[:space:]]*$/ {
+      line = $0
+      sub(/^[[:space:]]*\[/, "", line)
+      sub(/\][[:space:]]*$/, "", line)
+      section = line
+      next
+    }
+    index($0, needle) > 0 && section != "" { print section; section = "" }
+  ' "$file"
+}
+
+render_new_dialog_data_json() {
+  printf '{"agentKinds":%s,"agentDirs":%s,"serviceIds":%s,"enabledServices":%s,"projectTitles":%s,"agentPorts":%s,"servicePorts":%s,"portAgentKinds":%s,"portServiceIds":%s}' \
+    "$(toml_section_names "$(agent_kind_manifest_dir)" | json_string_array)" \
+    "$(existing_agent_dir_names | json_string_array)" \
+    "$(service_definition_ids | json_string_array)" \
+    "$(enabled_service_ids | json_string_array)" \
+    "$(existing_project_titles | json_string_array)" \
+    "$(repo_cfg_entries "agent-ports" | json_string_object)" \
+    "$(repo_cfg_entries "service-ports" | json_string_object)" \
+    "$(sections_with_key "$(agent_kind_manifest_dir)" "AELAB_AGENT_START_PORT_FLAG" | json_string_array)" \
+    "$(sections_with_key "$(service_manifest_dir)" "__SERVICE_PORT__" | json_string_array)"
+}
+
 render_index_html() {
   local host_name
   local generated_at
@@ -717,20 +828,8 @@ render_index_html() {
   service_links_html="$(render_service_links_html)"
   host_yolo_menu_section_js="$(render_host_yolo_menu_section_js)"
   sections_html="$(render_index_section_html "projects" "projects" "$project_links_html")"
-  if [[ -n "$agent_links_html" ]]; then
-    if [[ -n "$sections_html" ]]; then
-      sections_html="${sections_html}"$'\n'"$(render_index_section_html "agents" "agents" "$agent_links_html")"
-    else
-      sections_html="$(render_index_section_html "agents" "agents" "$agent_links_html")"
-    fi
-  fi
-  if [[ -n "$service_links_html" ]]; then
-    if [[ -n "$sections_html" ]]; then
-      sections_html="${sections_html}"$'\n'"$(render_index_section_html "services" "services" "$service_links_html")"
-    else
-      sections_html="$(render_index_section_html "services" "services" "$service_links_html")"
-    fi
-  fi
+  sections_html="${sections_html}"$'\n'"$(render_index_section_html "agents" "agents" "$agent_links_html")"
+  sections_html="${sections_html}"$'\n'"$(render_index_section_html "services" "services" "$service_links_html")"
   tailscale_nav_html="$(render_tailscale_nav_html "$current_section")"
   rendered="$(mktemp)"
 
@@ -740,6 +839,7 @@ render_index_html() {
     __TAILSCALE_NAV_HTML__ "$tailscale_nav_html" \
     __AGENT_LINKS_HTML__ "$sections_html" \
     __HOST_YOLO_MENU_SECTION_JS__ "$host_yolo_menu_section_js" \
+    __NEW_DIALOG_DATA__ "$(render_new_dialog_data_json)" \
     __GENERATED_AT__ "$generated_at" \
     __GENERATED_COMMIT__ "$(html_escape "$generated_commit")"
   cat "$rendered"

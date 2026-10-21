@@ -125,7 +125,9 @@ AELAB_USER = "agent"
 AELAB_GROUP = "agent"
 AELAB_AGENTS = "021 022 023 024"
 AELAB_SERVICES = "core"
-AELAB_PROJECTS = "aelab=/opt/aelab"
+AELAB_PROJECTS = [
+  "aelab=/opt/aelab",
+]
 AELAB_TAILSCALE_ONLY = "false"
 AELAB_CADDY_TLS = "off"
 ```

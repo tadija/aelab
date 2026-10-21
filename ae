@@ -1226,8 +1226,8 @@ func handleRename(args: [String]) -> Never {
             updates.append("updated \(repoConfigURL.path) [agent-ports]")
         }
 
-        let oldEnvURL = customEnvURL.appendingPathComponent("agents", isDirectory: true).appendingPathComponent("\(oldID).env")
-        let newEnvURL = customEnvURL.appendingPathComponent("agents", isDirectory: true).appendingPathComponent("\(newID).env")
+        let oldEnvURL = customEnvURL.appendingPathComponent("\(oldID).env")
+        let newEnvURL = customEnvURL.appendingPathComponent("\(newID).env")
         if try moveIfPresent(from: oldEnvURL, to: newEnvURL) {
             updates.append("moved \(oldEnvURL.path) -> \(newEnvURL.path)")
         }

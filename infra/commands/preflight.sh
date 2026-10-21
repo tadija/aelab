@@ -117,7 +117,8 @@ check_projects() {
     return 0
   }
 
-  for item in $raw; do
+  while IFS= read -r item; do
+    [[ -n "$item" ]] || continue
     if [[ "$item" != *=* ]]; then
       note_error "invalid AELAB_PROJECTS entry: $item"
       continue
@@ -133,7 +134,14 @@ check_projects() {
       note_error "AELAB_PROJECTS path does not exist: $path"
       continue
     fi
-  done
+  done < <(
+    if [[ "$raw" == *$'\n'* ]]; then
+      printf '%s\n' "$raw"
+    else
+      # Backward compatibility for the old pre-TOML compact string format.
+      printf '%s\n' $raw
+    fi
+  )
 
   note_ok "AELAB_PROJECTS paths resolved"
 }

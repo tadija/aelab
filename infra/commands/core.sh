@@ -333,6 +333,18 @@ toml_section_entries() {
       }
       return value
     }
+    function emit_array(key, value) {
+      gsub(/^[[:space:]]*\[/, "", value)
+      gsub(/\][[:space:]]*$/, "", value)
+      while (match(value, /"([^"\\]|\\.)*"|\047[^\047]*\047/)) {
+        item = substr(value, RSTART, RLENGTH)
+        item = strip_quotes(item)
+        if (key != "" && item != "") {
+          print key "\t" item
+        }
+        value = substr(value, RSTART + RLENGTH)
+      }
+    }
     /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
     /^[[:space:]]*\[[^][]+\][[:space:]]*$/ {
       current_section = $0
@@ -341,11 +353,32 @@ toml_section_entries() {
       current_section = trim(current_section)
       next
     }
+    in_array && current_section == wanted_section {
+      array_value = array_value " " $0
+      if ($0 ~ /\][[:space:]]*$/) {
+        emit_array(array_key, array_value)
+        in_array = 0
+        array_key = ""
+        array_value = ""
+      }
+      next
+    }
     current_section != wanted_section { next }
     {
       split($0, parts, "=")
       key = trim(parts[1])
-      value = strip_quotes(substr($0, index($0, "=") + 1))
+      value = trim(substr($0, index($0, "=") + 1))
+      if (value ~ /^\[/ && value !~ /\][[:space:]]*$/) {
+        in_array = 1
+        array_key = key
+        array_value = value
+        next
+      }
+      if (value ~ /^\[/) {
+        emit_array(key, value)
+        next
+      }
+      value = strip_quotes(value)
       if (key != "" && value != "") {
         print key "\t" value
       }
@@ -537,11 +570,36 @@ toml_section_env() {
   local wanted_section="$2"
   local key
   local value
+  local -a keys=()
+  local -a values=()
+  local existing_key
+  local found
+  local index
 
   while IFS=$'\t' read -r key value; do
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-    printf '%s=%s\n' "$key" "$(shell_quote "$value")"
+    found=0
+    index=0
+    for existing_key in "${keys[@]+"${keys[@]}"}"; do
+      if [[ "$existing_key" == "$key" ]]; then
+        found=1
+        break
+      fi
+      index=$((index + 1))
+    done
+    if ((found)); then
+      values[$index]+=$'\n'"$value"
+    else
+      keys+=("$key")
+      values+=("$value")
+    fi
   done < <(toml_section_entries "$file" "$wanted_section")
+
+  index=0
+  for key in "${keys[@]+"${keys[@]}"}"; do
+    printf '%s=%s\n' "$key" "$(shell_quote "${values[$index]}")"
+    index=$((index + 1))
+  done
 }
 
 reset_service_definition() {
