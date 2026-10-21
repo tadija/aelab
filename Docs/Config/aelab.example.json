@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "hosts": [
+    {
+      "name": "localhost",
+      "transport": "local",
+      "projects": [],
+      "services": [],
+      "tools": [],
+      "plugins": []
+    },
+    {
+      "name": "dev-server",
+      "destination": "dev-server",
+      "background": "#0b0f0d",
+      "tint": "#0f766e",
+      "projects": [
+        {
+          "name": "aelab",
+          "directory": "/srv/aelab",
+          "session": "aelab"
+        }
+      ],
+      "services": [
+        {
+          "name": "Gateway",
+          "provider": "systemd",
+          "target": "gateway.service",
+          "userUnit": true,
+          "project": "aelab",
+          "tool": "codex"
+        }
+      ],
+      "tools": [
+        "codex"
+      ],
+      "plugins": []
+    },
+    {
+      "name": "app-server",
+      "destination": "operator@app-server",
+      "port": 22,
+      "projects": [
+        {
+          "name": "Application",
+          "directory": "/srv/app",
+          "session": "app"
+        }
+      ],
+      "services": [
+        {
+          "name": "Caddy",
+          "provider": "systemd",
+          "target": "caddy.service",
+          "sudo": true
+        },
+        {
+          "name": "Redis",
+          "provider": "docker",
+          "target": "redis"
+        },
+        {
+          "name": "App stack",
+          "provider": "compose",
+          "target": "app",
+          "directory": "/srv/app",
+          "files": [
+            "/srv/app/compose.yaml"
+          ],
+          "environmentFile": "/srv/app/.env"
+        }
+      ],
+      "tools": [
+        "approved-host-diagnostic"
+      ],
+      "plugins": []
+    },
+    {
+      "name": "mac-server",
+      "destination": "mac-server",
+      "dockerContext": "desktop-linux",
+      "projects": [],
+      "tools": [],
+      "plugins": [],
+      "services": [
+        {
+          "name": "Example agent",
+          "provider": "launchd",
+          "target": "gui/501/com.example.agent",
+          "plist": "~/Library/LaunchAgents/com.example.agent.plist",
+          "logFiles": [
+            "~/Library/Logs/example-agent.log"
+          ]
+        }
+      ]
+    }
+  ],
+  "ttyButtons": [
+    {"key":"alt","label":"Alt"},
+    {"key":"shift","label":"Shift"},
+    {"key":"reload-tty","label":"Reload"},
+    {"key":"tmux-zoom","label":"Zoom"},
+    {"key":"tmux-mouse","label":"Mouse"},
+    {"key":"up","label":"Up"},
+    {"key":"down","label":"Down"},
+    {"key":"left","label":"Left"},
+    {"key":"right","label":"Right"},
+    {"key":"ctrl-a","label":"C-a"},
+    {"key":"ctrl-c","label":"C-c"},
+    {"key":"ctrl-d","label":"C-d"},
+    {"key":"ctrl-j","label":"C-j"},
+    {"key":"ctrl-l","label":"C-l"},
+    {"key":"ctrl-r","label":"C-r"},
+    {"key":"ctrl-u","label":"C-u"},
+    {"key":"ctrl-z","label":"C-z"},
+    {"key":"escape","label":"Esc"},
+    {"key":"tab","label":"Tab"},
+    {"key":"enter","label":"Enter"},
+    {"key":"backspace","label":"Bksp"},
+    {"key":"delete","label":"Del"},
+    {"key":"home","label":"Home"},
+    {"key":"end","label":"End"},
+    {"key":"page-up","label":"PgUp"},
+    {"key":"page-down","label":"PgDn"},
+    {"key":"copy","label":"Copy"},
+    {"key":"paste","label":"Paste"},
+    {"key":"scroll-up","label":"Scroll up"},
+    {"key":"scroll-down","label":"Scroll down"},
+    {"key":"copy-mode","label":"Copy mode"},
+    {"key":"tmux-window","label":"Window"},
+    {"key":"tmux-split-horizontal","label":"Split ↔"},
+    {"key":"tmux-split-vertical","label":"Split ↕"},
+    {"key":"reconnect","label":"Reconnect"}
+  ],
+  "tools": [
+    {
+      "name": "Codex",
+      "executable": "codex",
+      "arguments": [],
+      "yoloArguments": [
+        "--dangerously-bypass-approvals-and-sandbox"
+      ],
+      "session": "codex"
+    },
+    {
+      "name": "Approved host diagnostic",
+      "executable": "/usr/local/bin/lab-diagnostic",
+      "arguments": []
+    },
+    {
+      "name": "Claude Code",
+      "executable": "claude",
+      "arguments": []
+    },
+    {
+      "name": "Pi",
+      "executable": "pi",
+      "arguments": []
+    },
+    {
+      "name": "OpenCode",
+      "executable": "opencode",
+      "arguments": []
+    }
+  ],
+  "plugins": [
+    {"name":"Disk space","executable":"/bin/bash","arguments":["~/.aelab/plugins/disk-space.sh"]},
+    {"name":"Process count","executable":"ruby","arguments":["~/.aelab/plugins/process-count.rb"]},
+    {"name":"Uptime","executable":"swift","arguments":["~/.aelab/plugins/uptime.swift"],"timeout":30}
+  ],
+  "paths": [
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/home/linuxbrew/.linuxbrew/bin",
+    "/home/linuxbrew/.linuxbrew/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin"
+  ]
+}

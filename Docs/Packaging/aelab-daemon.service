@@ -1,0 +1,13 @@
+# User unit: ~/.config/systemd/user/aelab-daemon.service
+# Then: systemctl --user daemon-reload && systemctl --user enable --now aelab-daemon.service
+[Unit]
+Description=aelab daemon
+
+[Service]
+ExecStart="%h/.aelab/daemon/aelab-daemon" --home "%h/.aelab/daemon" run
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

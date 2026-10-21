@@ -1,0 +1,41 @@
+import { chromium } from '../Frontend/node_modules/playwright/index.mjs';
+import { expect } from '../Frontend/node_modules/@playwright/test/index.mjs';
+const origin = process.env.AELAB_TEST_ORIGIN;
+const browser = await chromium.launch({ headless: true, ...(process.env.AELAB_TEST_BROWSER ? { executablePath: process.env.AELAB_TEST_BROWSER } : {}) });
+try {
+  const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+  const page = await context.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`${origin}/hosts/laptop/`);
+  await page.getByLabel('Administrator password').fill(process.env.AELAB_TEST_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Work', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Probe Disk', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Probe Disk', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'PLUGINS', exact: true })).toContainText('Root filesystem:');
+  // Directory picker and source editor use the daemon without new browser-facing APIs.
+  await page.getByRole('button', { name: 'Add project', exact: true }).click();
+  await page.getByRole('button', { name: 'Browse Absolute project directory', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Choose host directory', exact: true }).getByRole('button', { name: 'Choose directory', exact: true })).toBeEnabled();
+  await page.getByRole('dialog', { name: 'Choose host directory', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Configure projects', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit script Disk', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: /source|script/i })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  const terminal = await context.newPage();
+  await terminal.goto(`${origin}/hosts/laptop/projects/work/`);
+  await expect(terminal.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  await expect(terminal.locator('.xterm')).toBeVisible();
+  const input = terminal.locator('.xterm-helper-textarea');
+  await input.pressSequentially('printf "DAEMON_BROWSER_OK\\n"'); await input.press('Enter');
+  await expect(terminal.locator('.xterm-rows > div').filter({ hasText: /^DAEMON_BROWSER_OK\s*$/ }).last()).toBeVisible();
+  await expect(terminal.locator('.xterm-rows')).not.toContainText('not a terminal');
+  await terminal.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'SHELLS', exact: true })).toContainText(/pinned/i);
+  await terminal.setViewportSize({ width: 740, height: 520 });
+  await input.pressSequentially('stty size'); await input.press('Enter');
+  await expect(terminal.locator('.xterm-rows')).toContainText(/\d+ \d+/);
+  await terminal.close();
+  expect(errors).toEqual([]);
+  console.log('PASS: daemon dashboard/plugin/source/directory/project terminal/pin/resize workflows without SSH');
+} finally { await browser.close(); }

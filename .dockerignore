@@ -1,0 +1,24 @@
+# Only application build inputs enter the Docker build context.
+# Runtime state, credentials, SSH files and dependency caches stay out.
+**
+!Package.swift
+!Package.resolved
+!Sources/
+!Sources/**
+!Tests/
+!Tests/**
+!Frontend/
+!Frontend/index.html
+!Frontend/package.json
+!Frontend/package-lock.json
+!Frontend/tsconfig.json
+!Frontend/vite.config.ts
+!Frontend/src/
+!Frontend/src/**
+!Frontend/public/
+!Frontend/public/**
+!Docs/
+!Docs/Config/
+!Docs/Config/aelab.example.json
+!Docs/Packaging/
+!Docs/Packaging/Dockerfile

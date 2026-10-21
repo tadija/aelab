@@ -1,0 +1,13 @@
+<script lang="ts">
+  import Section from './Section.svelte';
+  import Icon from './Icon.svelte';
+  import Reorder from './Reorder.svelte';
+  import { sortable } from './rowOrder';
+  import { appPath } from './basePath';
+  import type { Host, Tool, Project, Launch } from './model';
+  let { host, tools, branches, expanded, toggle, edit, remove, move, reordering, open, yolo = $bindable() }: {
+    host: Host; tools: Tool[]; branches?: Record<string, string>; expanded: boolean; toggle: (value: boolean) => void; edit: (project?: Project) => void; remove: (id: string) => void; move: (id: string, target: string) => Promise<void>; reordering: boolean; open: (launch: Omit<Launch, 'host'>) => void; yolo: Record<string, boolean>;
+  } = $props();
+  const selected = $derived(host.id);
+</script>
+      <Section title="PROJECTS" expanded={expanded} onToggle={toggle}>{#snippet actions()}<button aria-label="Add project" onclick={() => edit()}>+</button>{/snippet}<ul use:sortable={{ group: `projects:${selected}`, move: (id, target) => { void move(id, target); } }}>{#each host.projects as p (p.id)}<li class="project-row" data-reorder-id={p.id}><div class="row"><div class="project-heading"><a class="row-title" href={appPath(`/hosts/${selected}/projects/${p.id}/`)} target="_blank" rel="noreferrer">{p.name}</a></div><div class="actions"><button class="project-yolo-toggle" aria-label={`YOLO mode for ${p.name}`} aria-pressed={yolo[`${selected}:${p.id}`] ?? false} onclick={() => yolo[`${selected}:${p.id}`] = !yolo[`${selected}:${p.id}`]}>YOLO</button><button aria-label="Edit" title="Edit" onclick={() => edit(p)}><Icon name="edit" /></button><button aria-label="Delete" title="Delete" onclick={() => remove(p.id)}><Icon name="close" /></button></div></div><div class="project-metadata"><small><span class="label-chip" title={p.directory}>{p.directory}</span></small>{#if branches?.[p.id]}<span class="badge git-badge" data-tone="neutral" title={`Git branch: ${branches[p.id]}`} aria-label={`Git branch: ${branches[p.id]}`}>{branches[p.id]}</span>{/if}</div><div class="project-footer"><div class="actions project-tools">{#each tools.filter(tool => !yolo[`${selected}:${p.id}`] || tool.yoloArguments !== undefined) as t}<button aria-label={`Open ${t.name} in ${p.name}`} onclick={() => open({ project: p.id, tool: t.id, yolo: yolo[`${selected}:${p.id}`] ?? false })}>{t.name}</button>{/each}</div><Reorder id={p.id} name={p.name} group={`projects:${selected}`} rows={host.projects} disabled={reordering} move={(id, target) => { void move(id, target); }} /></div></li>{/each}</ul></Section>

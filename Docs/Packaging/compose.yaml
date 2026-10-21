@@ -1,0 +1,16 @@
+services:
+  aelab:
+    build:
+      context: ../..
+      dockerfile: Docs/Packaging/Dockerfile
+    user: "10001:10001"
+    environment:
+      AELAB_ORIGIN: https://lab.example.com
+    ports:
+      - "127.0.0.1:2108:2108"
+    volumes:
+      - ./home:/var/lib/aelab
+      # Populate a dedicated SSH directory for uid 10001; private keys 0600.
+      # Never mount the managed hosts' Docker socket; Docker commands run over SSH.
+      - ./ssh:/home/aelab/.ssh:ro
+    restart: unless-stopped

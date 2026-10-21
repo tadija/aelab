@@ -1,0 +1,20 @@
+# Build artifacts and editor files
+.build/
+.swiftpm/
+Frontend/node_modules/
+Frontend/dist/
+__pycache__/
+.DS_Store
+Thumbs.db
+.vscode/
+.nvim/
+.codex/
+.claude/
+
+# Private runtime state and local deployment files
+.aelab/
+state/
+Docs/Packaging/home/
+Docs/Packaging/ssh/
+Docs/Packaging/server.env
+.env

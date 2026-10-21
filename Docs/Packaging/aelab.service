@@ -1,0 +1,25 @@
+[Unit]
+Description=aelab central host console
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aelab
+Group=aelab
+WorkingDirectory=/var/lib/aelab
+EnvironmentFile=/etc/aelab/server.env
+ExecStart=/usr/local/bin/aelab-server
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/aelab
+# SSH keys/config/known_hosts and any stable agent socket must be accessible to aelab.
+# Remote sudo applies on managed hosts; this service itself never needs local root.
+
+[Install]
+WantedBy=multi-user.target
