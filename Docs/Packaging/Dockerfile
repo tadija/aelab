@@ -5,14 +5,14 @@ RUN npm ci
 COPY Frontend/ ./
 RUN npm run build
 
-FROM swift:6.2-bookworm AS backend
+FROM swift:6.4-bookworm AS backend
 WORKDIR /src
 COPY Package.swift Package.resolved ./
 COPY Sources/ Sources/
 COPY Tests/ Tests/
 RUN swift build -c release --product aelab-server && swift build -c release --product aelab
 
-FROM swift:6.2-bookworm-slim
+FROM swift:6.4-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client ca-certificates && rm -rf /var/lib/apt/lists/* && useradd -m -u 10001 aelab
 WORKDIR /opt/aelab
 COPY --from=backend /src/.build/release/aelab-server /usr/local/bin/aelab-server

@@ -4,7 +4,7 @@
 
 ## Install on the host
 
-Requires Git, Swift 6.2+ and OpenSSL; macOS requires 14+. No Node or frontend build is needed.
+Requires Git, Swift 6.4+ and OpenSSL; macOS requires 14+. No Node or frontend build is needed.
 
 ```sh
 git clone https://github.com/tadija/aelab.git

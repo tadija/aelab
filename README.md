@@ -14,7 +14,7 @@ Built with Swift/Hummingbird, Svelte 5 and xterm.js. The CLI works independently
 
 ## Build and run
 
-Requires Swift 6.2+, Node 24+, Python 3 and SSH access to remote hosts. macOS requires 14+. Persistent tmux sessions require tmux on the selected host.
+Requires Swift 6.4+, Node 24+, Python 3 and SSH access to remote hosts. macOS requires 14+. Persistent tmux sessions require tmux on the selected host.
 
 ```sh
 ./.ae run

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.4
 import PackageDescription
 let package = Package(name: "aelab", platforms: [.macOS(.v14)], products: [
  .executable(name: "aelab-daemon", targets: ["Daemon"]), .executable(name: "aelab-server", targets: ["Server"]), .executable(name: "aelab", targets: ["Cli"])
