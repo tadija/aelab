@@ -50,3 +50,15 @@ import Testing
     launch.yolo = true; launch.project = "p"
     #expect(throws: (any Error).self) { _ = try launch.resolve(config) }
 }
+
+@Test func hostShellsStartInPlatformHome() throws {
+    var config = Configuration()
+    config.hosts = [Host(name: "local", transport: .local)]
+    let shell = try TerminalLaunch(host: "local").resolve(config).1
+    #expect(shell.hasPrefix("cd -- \"$HOME\" && "))
+    let tmux = try TerminalLaunch(host: "local", persistent: true).resolve(config).1
+    #expect(tmux.contains(" -c \"$HOME\" "))
+    let attached = try TerminalLaunch(host: "local", session: "existing").resolve(config).1
+    #expect(attached.contains("attach-session"))
+    #expect(!attached.contains("$HOME"))
+}

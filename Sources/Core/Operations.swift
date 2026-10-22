@@ -65,19 +65,20 @@ public struct TerminalLaunch: Codable, Sendable {
         if let name {
             try validateSession(name)
             var args = ["tmux", "attach-session", "-t", "=" + name]
+            var launchArguments = ""
             if persistent == true || configuredSession != nil {
                 args = ["tmux", "new-session", "-A", "-s", name]
-                if let directory { args += ["-c", directory] }
-                args += [h.executionScript(launch)]
+                let startDirectory = directory.map(quote) ?? "\"$HOME\""
+                launchArguments = " -c " + startDirectory + " " + quote(h.executionScript(launch))
             }
-            var script = command(args)
+            var script = command(args) + launchArguments
             if let window {
                 guard window.range(of: "^@[0-9]+$", options: .regularExpression) != nil else { throw AEError("Invalid tmux window") }
                 script = command(["tmux", "select-window", "-t", "=\(name):\(window)"]) + "; exec " + script
             } else { script = "exec " + script }
             return (h, checks + script, name)
         }
-        let script = (directory.map { "cd -- \(quote($0)) && " } ?? "") + launch
+        let script = "cd -- " + (directory.map(quote) ?? "\"$HOME\"") + " && " + launch
         return (h, checks + script, nil)
     }
 }

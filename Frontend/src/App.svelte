@@ -135,6 +135,7 @@
     return { host: parsed.host ?? '', project: query.get('project') ?? parsed.project, tool: query.get('tool') ?? parsed.tool, session: parsed.session, pinned: parsed.pinned, directory: query.get('directory') ?? undefined, persistent: query.has('persistent') ? query.get('persistent') === '1' : undefined, yolo: query.get('yolo') === '1', window: parsed.window } satisfies Launch;
   });
   $effect(() => { document.documentElement.dataset.theme = theme; });
+  $effect(() => { if (!parsed.terminal) document.title = host ? `${host.name}@aelab` : 'aelab'; });
   async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     let response: Response;
     try { response = await fetch(appPath(path), { method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); }
@@ -275,7 +276,7 @@
 {:else if !authenticated}
   <main class="login"><div class="brand"><span class="tint-trigger" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><h1>aelab</h1></div><p class="muted">central host console</p><form class="login-form" onsubmit={login}><input type="password" aria-label="Administrator password" placeholder="Password" autocomplete="current-password" required bind:value={password} /><button>Sign in</button></form>{#if error}<p class="error">{error}</p>{/if}</main>
 {:else if parsed.terminal && config?.hosts.find(h => h.id === parsed.host)}
-  <Terminal launch={terminalLaunch} host={config.hosts.find(h => h.id === parsed.host)!} buttons={config.ttyButtons} {csrf} {request} />
+  <Terminal tools={config.tools} launch={terminalLaunch} host={config.hosts.find(h => h.id === parsed.host)!} buttons={config.ttyButtons} {csrf} {request} />
 {:else}
   <main class="dashboard" class:compact>
     <header class="topbar"><div class="brand"><label class="tint-trigger" title={host ? `Tint for ${host.name}` : 'Select a host to set its tint'}>

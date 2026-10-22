@@ -30,7 +30,7 @@ struct TerminalWebSocket: Sendable {
                     let tool = config.enabledTools(host).first { $0.id == launch.tool }
                     var cwd = launch.directory ?? project?.directory ?? tool?.directory ?? ""
                     if cwd.isEmpty {
-                        let result = try await operations.execution.run(host, args: ["pwd"], timeout: 5)
+                        let result = try await operations.execution.execute(host, script: "cd -- \"$HOME\" && pwd", timeout: 5)
                         if result.status == 0 { cwd = result.output.trimmingCharacters(in: .whitespacesAndNewlines) }
                     }
                     let pty = try await operations.execution.terminal(host, script: script)

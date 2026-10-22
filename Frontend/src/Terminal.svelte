@@ -6,8 +6,8 @@
   import { Terminal } from '@xterm/xterm';
   import { FitAddon } from '@xterm/addon-fit';
   import '@xterm/xterm/css/xterm.css';
-  import { shouldCopy, terminalURL, prefixBytes, type Launch, type Host, type TTYButton } from './model';
-  let { launch, host, buttons, csrf, request }: { launch: Launch; host: Host; buttons: TTYButton[]; csrf: string; request: <T>(path: string, method?: string, body?: unknown) => Promise<T> } = $props();
+  import { shouldCopy, terminalURL, prefixBytes, type Launch, type Host, type Tool, type TTYButton } from './model';
+  let { launch, host, tools, buttons, csrf, request }: { launch: Launch; host: Host; tools: Tool[]; buttons: TTYButton[]; csrf: string; request: <T>(path: string, method?: string, body?: unknown) => Promise<T> } = $props();
   let container: HTMLDivElement;
   let headerCollapsed = $state(localStorage.getItem('aelab-tty-header-collapsed') === '1');
   let keysVisible = $state(false); let pinned = $state(false); let terminalID = $state('');
@@ -15,6 +15,8 @@
   let cwd = $state(''); let activeLaunch = $state<Launch>(untrack(() => launch));
   function toggleHeader() { headerCollapsed = !headerCollapsed; localStorage.setItem('aelab-tty-header-collapsed', headerCollapsed ? '1' : '0'); }
   function togglePin() { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: pinned ? 'unpin' : 'pin' })); }
+  const title = $derived(tools.find(tool => tool.id === activeLaunch.tool)?.name ?? host.projects.find(project => project.id === activeLaunch.project)?.name ?? activeLaunch.session ?? 'shell');
+  $effect(() => { document.title = `${title}@aelab`; });
   let status = $state('connecting'); let error = $state('');
   let resolvedSession = $state<string>();
   let tmuxPrefix = $state('\x02');
