@@ -127,9 +127,9 @@
 </script>
 <div class="terminal-page" class:header-collapsed={headerCollapsed} style:background style:--terminal-background={background}>
   <header class="terminal-header">
-    <div class="terminal-header-left"><a class="terminal-brand" href={appPath(`/hosts/${host.id}/`)} title="Open host root">aelab</a>
+    <div class="terminal-header-left"><a class="terminal-brand" href={appPath(`/hosts/${host.id}/`)} title="Open host root"><svg class="terminal-logo" viewBox="0 0 24 24" style:color={background} aria-label={`Terminal background ${background}`} role="img"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>aelab</a>
       <button class="terminal-circle header-toggle" aria-expanded={!headerCollapsed} aria-label={headerCollapsed ? 'Expand header' : 'Collapse header'} title={headerCollapsed ? 'Expand header' : 'Collapse header'} onclick={toggleHeader}><Icon name="chevron" /></button>
-      <div class="terminal-meta"><span><button class="host-background-reset" title="Reset to host terminal background" aria-label="Reset terminal background" onclick={resetBackground}>host</button>{#if platform}<small class="terminal-platform label-chip">{platform}</small>{/if}<code class="label-chip">{hostname}</code></span><span class="terminal-color" style:background title={background} aria-label={`Terminal background ${background}`}></span><span class="terminal-cwd"><label title="Change cwd terminal background">cwd<input type="color" aria-label="background" value={background} disabled={!cwd} oninput={event => tint(event.currentTarget.value)} /></label><code class="label-chip" title={cwd}>{cwd || '…'}</code></span></div>
+      <div class="terminal-meta"><span><button class="host-background-reset" title="Reset to host terminal background" aria-label="Reset terminal background" onclick={resetBackground}>host</button>{#if platform}<small class="terminal-platform label-chip">{platform}</small>{/if}<code class="label-chip">{hostname}</code></span><span class="terminal-cwd"><label title="Change cwd terminal background">cwd<input type="color" aria-label="background" value={background} disabled={!cwd} oninput={event => tint(event.currentTarget.value)} /></label><code class="label-chip" title={cwd}>{cwd || '…'}</code></span></div>
     </div>
     <div class="terminal-header-actions"><span class="terminal-status" data-status={status}><span class="status-dot" aria-hidden="true"></span><span>{status}</span></span>
       {#if !resolvedSession}<button class="terminal-circle pin-toggle" aria-pressed={pinned} aria-label={pinned ? 'Unpin terminal session' : 'Pin terminal session'} title={pinned ? 'Unpin terminal session' : 'Pin terminal session'} disabled={status !== 'connected' || !terminalID} onclick={togglePin}><Icon name="validate" /></button>{/if}
@@ -138,13 +138,13 @@
   </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <div class="terminal-workspace">
-  {#if program}<details class="program-status" aria-label="Program status">
-    <summary><span class="badge" data-tone={programStatusTone(program)}>{programStatusLabel(program)}</span><span class="program-message">{program.title || program.app || title}{#if program.msg} · {program.msg}{/if}</span>{#if programRecords.length > 1}<small>{programRecords.length} reports</small>{/if}</summary>
-    <ul>{#each programRecords as record (record.id)}<li><span class="badge" data-tone={programStatusTone(record)}>{programStatusLabel(record)}</span><span>{record.title || record.app || title}{#if record.id} · {record.id}{/if}{#if record.msg} · {record.msg}{/if}</span></li>{/each}</ul>
-  </details>{/if}
   {#if keysVisible}<div class="terminal-keys" id="terminal-keybar" role="toolbar" aria-label="terminal key bar">
     {#each buttons as button}<button title={button.label} aria-label={button.label} aria-pressed={button.key === 'alt' ? alt : button.key === 'shift' ? shift : undefined} onpointerdown={event => event.preventDefault()} onclick={() => keyAction(button.key)}>{button.label}</button>{/each}
   </div>{/if}
   <div class="terminal-container" bind:this={container}></div>
   </div>
+  {#if program}<details class="program-status" aria-label="Program status">
+    <summary><span class="badge" data-tone={programStatusTone(program)}>{programStatusLabel(program)}</span><span class="program-message">{program.title || program.app || title}{#if program.msg} · {program.msg}{/if}</span>{#if programRecords.length > 1}<small>{programRecords.length} reports</small>{/if}</summary>
+    <ul>{#each programRecords as record (record.id)}<li><span class="badge" data-tone={programStatusTone(record)}>{programStatusLabel(record)}</span><span>{record.title || record.app || title}{#if record.id} · {record.id}{/if}{#if record.msg} · {record.msg}{/if}</span></li>{/each}</ul>
+  </details>{/if}
 </div>

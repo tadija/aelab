@@ -575,7 +575,7 @@ try {
       }
       await expect(shell.locator('.terminal-page')).toHaveCSS('background-color', 'rgb(34, 51, 68)');
       await expect(shell.locator('.terminal-meta input[type=color]')).toHaveCount(1);
-      await expect(shell.locator('.terminal-color')).toHaveCSS('background-color', 'rgb(34, 51, 68)');
+      await expect(shell.locator('.terminal-logo')).toHaveCSS('color', 'rgb(34, 51, 68)');
       await expect(shell.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(0);
       await shell.getByRole('button', { name: 'Collapse header', exact: true }).click();
       await expect(shell.locator('.terminal-page')).toHaveClass(/header-collapsed/);

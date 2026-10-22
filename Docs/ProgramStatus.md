@@ -2,7 +2,7 @@
 
 The browser terminal supports [OSC 7501, Program Status Protocol revision 0.4](https://www.superlogical.com/rex/docs/build/program-status). Programs can report work, progress, a request for input, completion or failure through their terminal output.
 
-aelab shows the most actionable report above the terminal and in its browser tab title, for example `[approval needed] Codex@aelab`. Expand the status strip to see all reports. Approval requests take priority over failures, active work, completion and idle reports. Connection status remains separate. The strip stays visible when the terminal header is collapsed.
+aelab shows the most actionable report at the bottom of the terminal page and in its browser tab title, for example `[approval needed] Codex@aelab`. Expand the status strip to see all reports. Approval requests take priority over failures, active work, completion and idle reports. Connection status remains separate. The strip stays visible when the terminal header is collapsed.
 
 To try it in an aelab shell:
 

@@ -53,13 +53,26 @@ try {
     expect(Math.abs(badge.y + badge.height / 2 - grip.y - grip.height / 2)).toBeLessThan(2);
     expect(badge.x + badge.width).toBeLessThanOrEqual(grip.x);
   }
+  const hostPicker = page.getByRole('group', { name: 'Host picker' });
+  const expandedTop = (await hostPicker.boundingBox()).y;
+  const headingTop = (await page.locator('.dashboard > .picker-heading').boundingBox()).y;
+  await page.getByRole('button', { name: 'Hide shells', exact: true }).click();
+  await expect(page.getByLabel('Pinned shell shortcuts', { exact: true })).toBeVisible();
+  expect((await hostPicker.boundingBox()).y).toBe(expandedTop);
+  expect((await page.locator('.dashboard > .picker-heading').boundingBox()).y).toBe(headingTop);
+  await page.getByRole('button', { name: 'Show shells', exact: true }).click();
+  expect((await hostPicker.boundingBox()).y).toBe(expandedTop);
   const header = page.locator('.topbar');
   const brandBox = await header.locator('.brand').boundingBox(), hostBox = await header.locator('.host-launch').boundingBox(), actionsBox = await header.locator(':scope > .actions').boundingBox();
   expect(hostBox.x + hostBox.width / 2).toBeCloseTo((await header.boundingBox()).x + (await header.boundingBox()).width / 2, 0);
   expect(brandBox.x + brandBox.width).toBeLessThan(hostBox.x);
   expect(hostBox.x + hostBox.width).toBeLessThan(actionsBox.x);
-  const editHost = await header.getByRole('button', { name: 'Edit host', exact: true }).boundingBox(), identity = await header.locator('.host-identity').boundingBox(), launch = await header.getByRole('button', { name: 'Host launch menu' }).boundingBox();
-  expect(editHost.x).toBeLessThan(identity.x); expect(identity.x).toBeLessThan(launch.x);
+  const hostname = header.getByRole('button', { name: 'layout-fixture', exact: true });
+  const platform = await header.locator('.host-platform').boundingBox(), hostnameBox = await hostname.boundingBox(), launch = await header.getByRole('button', { name: 'Host launch menu' }).boundingBox();
+  expect(platform.x).toBeLessThan(hostnameBox.x); expect(hostnameBox.x).toBeLessThan(launch.x);
+  await hostname.click();
+  await expect(page.getByRole('dialog', { name: 'Configure hosts', exact: true })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
   await header.getByRole('button', { name: 'Host launch menu' }).click();
   await expect(header.getByRole('button', { name: 'Shell', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
