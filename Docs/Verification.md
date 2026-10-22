@@ -28,7 +28,7 @@ python3 -m unittest discover -s Scripts -p 'test_api_docs.py'
 | `python3 Scripts/daemon-smoke.py` | Direct TLS without SSH: pairing, certificate/auth/Origin rejection, multiplexed commands, discovery/plugins, native PTY/resize, timeouts and protocol bounds |
 | `python3 Scripts/daemon-install-smoke.py` | Native daemon-only build orchestration, checkout independence, install collisions, unchanged credentials, refusal while running and stopped executable replacement; builds are recorded stand-ins with real daemon binaries |
 | `python3 Scripts/base-path-smoke.py` | Nested runtime prefix, browser assets/deep links, scoped auth cookies, Origin checks, API docs and real terminal WebSocket |
-| `AELAB_TEST_BROWSER_SCRIPT=compact-browser-smoke.mjs python3 Scripts/base-path-smoke.py` | Responsive 1–5-column cards in all sections/discovery, per-host layout/theme, row badge alignment, footer centering, reordering, narrow-screen fallback and long-label wrapping |
+| `AELAB_TEST_BROWSER_SCRIPT=grid-browser-smoke.mjs python3 Scripts/base-path-smoke.py` | Responsive 1–8-column cards in all sections/discovery, centered host header, per-host theme, row badge alignment, footer centering, reordering, narrow-screen fallback and long-label wrapping |
 | API contract checks | HTTP route coverage, schema references, required path parameters, unique operations, sorted output and synchronized embedding |
 | `git diff --check` | Whitespace |
 

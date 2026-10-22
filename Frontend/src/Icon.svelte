@@ -1,8 +1,6 @@
 <script lang="ts">
-  let { name }: { name: 'rows' | 'grid' | 'code' | 'settings' | 'logout' | 'close' | 'reload' | 'validate' | 'save' | 'edit' | 'filter' | 'chevron' | 'wrap' | 'grip' | 'folder' | 'upload' } = $props();
+  let { name }: { name: 'code' | 'settings' | 'logout' | 'close' | 'reload' | 'validate' | 'save' | 'edit' | 'filter' | 'chevron' | 'wrap' | 'grip' | 'folder' | 'upload' } = $props();
   const paths = {
-    rows: 'M3 3h18v7H3zM3 14h18v7H3z',
-    grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
     folder: 'M3 7V4h7l2 3h9v13H3V7z',
     upload: 'M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6',
     grip: 'M8 5h.01M16 5h.01M8 12h.01M16 12h.01M8 19h.01M16 19h.01',

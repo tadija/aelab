@@ -443,7 +443,8 @@ button:has(>.icon) {
   justify-content: flex-start;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
+  min-width: 0;
+  justify-self: center;
   font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 
@@ -1638,42 +1639,63 @@ li[data-reorder-id] {
   flex-shrink: 0;
 }
 
-/* Compact mode changes only dashboard card lists, never forms or directory trees. */
+/* Adaptive dashboard card lists; forms and directory trees retain their layouts. */
 
-.dashboard.compact section>ul>li,.dashboard.compact .host-shells>ul>li {
+.dashboard section>ul>li,.dashboard .host-shells>ul>li {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.dashboard.compact .row-title,.dashboard.compact .project-heading {
+.dashboard .row-title,.dashboard .project-heading {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 @media (min-width:601px) {
-  .dashboard.compact section>ul,.dashboard.compact .host-shells>ul {
+  .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(2,minmax(0,1fr));
   }
 }
 
 @media (min-width:1200px) {
-  .dashboard.compact { max-width: 1080px; }
-  .dashboard.compact section>ul,.dashboard.compact .host-shells>ul {
+  .dashboard { max-width: 1080px; }
+  .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(3,minmax(0,1fr));
   }
 }
 
 @media (min-width:1560px) {
-  .dashboard.compact { max-width: 1440px; }
-  .dashboard.compact section>ul,.dashboard.compact .host-shells>ul {
+  .dashboard { max-width: 1440px; }
+  .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(4,minmax(0,1fr));
   }
 }
 
 @media (min-width:1920px) {
-  .dashboard.compact { max-width: 1800px; }
-  .dashboard.compact section>ul,.dashboard.compact .host-shells>ul {
+  .dashboard { max-width: 1800px; }
+  .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(5,minmax(0,1fr));
+  }
+}
+
+@media (min-width:2280px) {
+  .dashboard { max-width: 2160px; }
+  .dashboard section>ul,.dashboard .host-shells>ul {
+    grid-template-columns: repeat(6,minmax(0,1fr));
+  }
+}
+
+@media (min-width:2640px) {
+  .dashboard { max-width: 2520px; }
+  .dashboard section>ul,.dashboard .host-shells>ul {
+    grid-template-columns: repeat(7,minmax(0,1fr));
+  }
+}
+
+@media (min-width:3000px) {
+  .dashboard { max-width: 2880px; }
+  .dashboard section>ul,.dashboard .host-shells>ul {
+    grid-template-columns: repeat(8,minmax(0,1fr));
   }
 }
 
@@ -1723,4 +1745,20 @@ li[data-reorder-id] {
   -webkit-line-clamp: 2;
   white-space: normal;
   overflow-wrap: break-word;
+}
+
+/* Keep host controls centered between the brand and dashboard actions. */
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+}
+.topbar>.brand { justify-self: start; }
+.topbar>.actions { grid-column: 3; justify-self: end; flex-wrap: nowrap; }
+.host-identity { min-width: 0; }
+.host-identity .label-chip { overflow-wrap: anywhere; }
+.host-pin-shortcuts { margin-top: 12px; }
+@media (max-width:700px) {
+  .topbar { grid-template-columns: minmax(0,1fr) auto; }
+  .topbar>.actions { grid-column: 2; grid-row: 1; }
+  .topbar>.host-launch { grid-column: 1 / -1; grid-row: 2; }
 }

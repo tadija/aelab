@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { chromium } from '../Frontend/node_modules/playwright/index.mjs';
 import { expect } from '../Frontend/node_modules/@playwright/test/index.mjs';
 const origin = process.env.AELAB_TEST_ORIGIN, base = '/lab/aelab';
@@ -25,31 +24,13 @@ try {
   snapshot.config.hosts[0].services = ['One', 'Two', 'Three', 'Four'].map(name => ({ name, provider: 'systemd', target: name.toLowerCase() + '.service' }));
   snapshot.config.hosts[0].tools = ['codex', 'claude', 'pi', names[3]];
   snapshot.config.hosts[0].plugins = ['one', 'two', 'three', 'four-plugin-with-a-longer-title'];
-  snapshot.config.hosts.push(...['Local Two', 'Local Three', 'Local Four', 'Local Five', 'Local Six'].map(name => ({ name, transport: 'local', projects: [], services: [], tools: [], plugins: [] })));
+  snapshot.config.hosts.push(...['Local Two', 'Local Three', 'Local Four', 'Local Five', 'Local Six', 'Local Seven', 'Local Eight', 'Local Nine'].map(name => ({ name, transport: 'local', projects: [], services: [], tools: [], plugins: [] })));
   const saved = await context.request.put(origin + base + '/api/config', { data: snapshot, headers: { Origin: origin, 'X-CSRF-Token': session.csrf } });
   expect(saved.status()).toBe(200);
   await page.reload();
-  const toggle = page.getByRole('button', { name: 'Compact layout', exact: true });
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'Compact layout', exact: true })).toHaveCount(0);
   const projectList = page.getByRole('region', { name: 'PROJECTS', exact: true }).locator('ul');
-  async function compareCSS() {
-    if (!process.env.AELAB_TEST_PREVIOUS_CSS) return;
-    const changes = await page.evaluate(previous => {
-      const elements = [...document.querySelectorAll('.dashboard, .dashboard *')].filter(element => element.getClientRects().length);
-      const snapshot = () => elements.map(element => Object.fromEntries([...getComputedStyle(element)].filter(key => key !== 'transform' || !element.classList.contains('loader')).map(key => [key, getComputedStyle(element).getPropertyValue(key)])));
-      const current = snapshot(), style = document.createElement('style'); style.textContent = previous; document.head.append(style);
-      const old = snapshot(); style.remove();
-      return current.flatMap((properties, i) => Object.keys(properties).filter(key => properties[key] !== old[i][key]).map(key => `${elements[i].tagName}.${elements[i].className}: ${key}: ${properties[key]} vs ${old[i][key]}`));
-    }, readFileSync(process.env.AELAB_TEST_PREVIOUS_CSS, 'utf8'));
-    expect(changes).toEqual([]);
-  }
   const measure = list => list.locator(':scope > li').evaluateAll(rows => rows.map(row => { const { x, y, width } = row.getBoundingClientRect(); return { x, y, width, overflow: row.scrollWidth > row.clientWidth + 1 }; }));
-  await compareCSS();
-  const normal = await measure(projectList), fullWidth = normal[0].width;
-  expect(normal[0].x).toBe(normal[1].x); expect(normal[1].y).toBeGreaterThan(normal[0].y);
-  const normalIcon = await toggle.locator('path').getAttribute('d');
-  await toggle.click(); await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  expect(await toggle.locator('path').getAttribute('d')).not.toBe(normalIcon);
   const assertGrid = async list => {
     await expect(list.locator(':scope > li').nth(1)).toBeVisible();
     const boxes = await measure(list);
@@ -72,7 +53,17 @@ try {
     expect(Math.abs(badge.y + badge.height / 2 - grip.y - grip.height / 2)).toBeLessThan(2);
     expect(badge.x + badge.width).toBeLessThanOrEqual(grip.x);
   }
-  await page.screenshot({ path: '/tmp/aelab-row-layout.png', fullPage: true });
+  const header = page.locator('.topbar');
+  const brandBox = await header.locator('.brand').boundingBox(), hostBox = await header.locator('.host-launch').boundingBox(), actionsBox = await header.locator(':scope > .actions').boundingBox();
+  expect(hostBox.x + hostBox.width / 2).toBeCloseTo((await header.boundingBox()).x + (await header.boundingBox()).width / 2, 0);
+  expect(brandBox.x + brandBox.width).toBeLessThan(hostBox.x);
+  expect(hostBox.x + hostBox.width).toBeLessThan(actionsBox.x);
+  const editHost = await header.getByRole('button', { name: 'Edit host', exact: true }).boundingBox(), identity = await header.locator('.host-identity').boundingBox(), launch = await header.getByRole('button', { name: 'Host launch menu' }).boundingBox();
+  expect(editHost.x).toBeLessThan(identity.x); expect(identity.x).toBeLessThan(launch.x);
+  await header.getByRole('button', { name: 'Host launch menu' }).click();
+  await expect(header.getByRole('button', { name: 'Shell', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: '/tmp/aelab-grid-layout.png', fullPage: true });
   const scriptButtons = page.getByRole('region', { name: 'PLUGINS', exact: true }).locator('.managed-actions').getByRole('button', { name: /^Edit script / });
   await expect(scriptButtons).toHaveCount(4);
   const footer = await page.locator('footer').evaluate(el => { const boxes = [...el.children].map(child => child.getBoundingClientRect()); const left = Math.min(...boxes.map(box => box.left)), right = Math.max(...boxes.map(box => box.right)); return { x: left, width: right - left }; }), section = await page.getByRole('region', { name: 'PROJECTS', exact: true }).boundingBox();
@@ -80,18 +71,14 @@ try {
   const edit = page.getByRole('region', { name: 'TOOLS', exact: true }).getByRole('button', { name: 'Edit', exact: true }).first();
   const remove = page.getByRole('button', { name: 'Delete tool definition', exact: true }).first();
   expect(await edit.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(await remove.evaluate(el => getComputedStyle(el).backgroundColor));
-  await compareCSS();
   await page.getByLabel('Reorder Work', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Move Work down', exact: true })).toBeVisible();
-  await compareCSS();
   await page.getByLabel('Reorder Work', { exact: true }).press('Escape');
   await page.getByRole('button', { name: 'Toggle theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await compareCSS();
   await page.getByRole('button', { name: 'Toggle theme' }).click();
-  expect((await measure(projectList))[0].width).toBeCloseTo((fullWidth - 10) / 2, 0);
-  // Wider compact dashboards grow to three/four/five columns without changing normal mode.
-  for (const [width, columns] of [[1300, 3], [1700, 4], [2100, 5]]) {
+  // Dashboard grids adapt through eight columns.
+  for (const [width, columns] of [[1300, 3], [1700, 4], [2100, 5], [2400, 6], [2800, 7], [3200, 8]]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const list of [...await page.locator('section > ul').all(), page.locator('.host-shells > ul')]) {
       const boxes = await measure(list);
@@ -109,7 +96,7 @@ try {
   await expect(projectList.locator('.row-title')).toHaveText(['Work Two', 'Work', 'Work Three', 'Work Four']);
   await page.getByLabel('Reorder Work', { exact: true }).press('ArrowDown');
   await expect(projectList.locator('.row-title')).toHaveText(['Work Two', 'Work Three', 'Work', 'Work Four']);
-  await page.reload(); await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
   await expect(projectList.locator('.row-title')).toHaveText(['Work Two', 'Work Three', 'Work', 'Work Four']);
   await page.getByRole('button', { name: 'Discovery services', exact: true }).click();
   await assertGrid(page.getByRole('region', { name: 'SERVICES', exact: true }).locator('ul'));
@@ -117,34 +104,30 @@ try {
   await expect(page.getByRole('dialog', { name: 'Configure projects', exact: true })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'all', exact: true }).click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await toggle.click();
   await assertGrid(page.getByRole('region', { name: 'HOSTS', exact: true }).locator('ul'));
-  await page.setViewportSize({ width: 2100, height: 1000 });
-  const fiveColumns = await measure(page.getByRole('region', { name: 'HOSTS', exact: true }).locator('ul'));
-  for (let i = 1; i < 5; i++) { expect(fiveColumns[i].y).toBe(fiveColumns[0].y); expect(fiveColumns[i].x).toBeGreaterThan(fiveColumns[i - 1].x); }
-  expect(fiveColumns[5].x).toBe(fiveColumns[0].x); expect(fiveColumns[5].y).toBeGreaterThan(fiveColumns[0].y);
+  for (const [width, columns] of [[1100, 2], [1300, 3], [1700, 4], [2100, 5], [2400, 6], [2800, 7], [3200, 8]]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const boxes = await measure(page.getByRole('region', { name: 'HOSTS', exact: true }).locator('ul'));
+    for (let i = 1; i < columns; i++) { expect(boxes[i].y).toBe(boxes[0].y); expect(boxes[i].x).toBeGreaterThan(boxes[i - 1].x); }
+    expect(boxes[columns].x).toBe(boxes[0].x); expect(boxes[columns].y).toBeGreaterThan(boxes[0].y);
+  }
   await page.setViewportSize({ width: 1100, height: 1000 });
   await page.getByRole('group', { name: 'Host picker' }).getByRole('button', { name: 'Local Two', exact: true }).click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Toggle theme' }).click();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('group', { name: 'Host picker' }).getByRole('button', { name: 'Local', exact: true }).click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await measure(projectList);
-  await compareCSS();
+  const mobileBrand = await header.locator('.brand').boundingBox(), mobileHost = await header.locator('.host-launch').boundingBox();
+  expect(mobileHost.y).toBeGreaterThanOrEqual(mobileBrand.y + mobileBrand.height);
+  await page.screenshot({ path: '/tmp/aelab-grid-mobile.png', fullPage: true });
   expect(mobile[0].x).toBe(mobile[1].x); expect(mobile[1].y).toBeGreaterThan(mobile[0].y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1100, height: 1000 });
-  await toggle.click(); await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect((await measure(projectList))[0].width).toBe(fullWidth);
-  await page.reload(); await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   const finalConfig = await (await context.request.get(origin + base + '/api/config')).json();
   expect(finalConfig.config.layout).toBeUndefined();
   expect(errors).toEqual([]);
-  console.log('PASS: responsive 1/2/3/4/5-column compact grid across all sections/discovery, unchanged normal width, long-label wrapping, per-host layout/theme, two-line badges, centered footer, cross-row reordering, host switching and mobile fallback');
+  console.log('PASS: responsive 1–8-column default grid across all sections/discovery, centered host header, long-label wrapping, per-host theme, two-line badges, centered footer, cross-row reordering, host switching and mobile fallback');
 } finally { await browser.close(); }

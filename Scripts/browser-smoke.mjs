@@ -59,13 +59,13 @@ try {
   const hostRow = overview.locator('li').filter({ hasText: 'browser-fixture' });
   await hostRow.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Host tint')).toHaveValue('#8b5cf6');
-  await page.evaluate(() => { localStorage.setItem('aelab-theme:browser-fixture', 'light'); localStorage.setItem('aelab-layout:browser-fixture', 'compact'); localStorage.setItem('aelab-tty-cwd-background:browser-fixture:/tmp', '#123456'); });
+  await page.evaluate(() => { localStorage.setItem('aelab-theme:browser-fixture', 'light'); localStorage.setItem('aelab-tty-cwd-background:browser-fixture:/tmp', '#123456'); });
   await page.getByLabel('Name', { exact: true }).fill('Renamed fixture');
   await page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Host tint').evaluate(element => { element.value = '#c2410c'; element.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Configure hosts' })).toBeHidden();
   if (!(await configSnapshot()).config.hosts.some(h => h.id === 'renamed-fixture' && h.name === 'Renamed fixture')) throw new Error('Editing a name did not change its derived ID');
-  expect(await page.evaluate(() => [localStorage.getItem('aelab-theme:renamed-fixture'), localStorage.getItem('aelab-tty-cwd-background:renamed-fixture:/tmp'), localStorage.getItem('aelab-layout:renamed-fixture')])).toEqual(['light', '#123456', 'compact']);
+  expect(await page.evaluate(() => [localStorage.getItem('aelab-theme:renamed-fixture'), localStorage.getItem('aelab-tty-cwd-background:renamed-fixture:/tmp')])).toEqual(['light', '#123456']);
   await expect(hostRow.locator('.row-title')).toHaveCSS('color', 'rgb(194, 65, 12)');
   const contextConfig = await configSnapshot(); contextConfig.config.hosts.find(host => host.id === 'renamed-fixture').dockerContext = 'desktop-linux';
   const contextCSRF = (await (await page.request.get(`${origin}/api/auth/session`)).json()).csrf;

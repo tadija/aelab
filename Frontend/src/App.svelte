@@ -26,15 +26,6 @@
   let observations = $state<Record<string, Observation>>({}); let pending = $state<Record<string, boolean>>({});
   let now = $state(Date.now()); let hostThemes = $state<Record<string, string>>({});
   const themeKey = $derived(selected || 'overview');
-  let hostLayouts = $state<Record<string, boolean>>({});
-  function savedLayout(id: string): boolean {
-    try { return localStorage.getItem(`aelab-layout:${id}`) === 'compact'; } catch { return false; }
-  }
-  const compact = $derived(hostLayouts[themeKey] ?? savedLayout(themeKey));
-  function toggleLayout() {
-    hostLayouts[themeKey] = !compact;
-    try { localStorage.setItem(`aelab-layout:${themeKey}`, hostLayouts[themeKey] ? 'compact' : 'normal'); } catch { /* Keep the current preference if storage is unavailable. */ }
-  }
   const theme = $derived(hostThemes[themeKey] ?? localStorage.getItem(`aelab-theme:${themeKey}`) ?? 'dark');
   function toggleTheme() { hostThemes[themeKey] = theme === 'dark' ? 'light' : 'dark'; localStorage.setItem(`aelab-theme:${themeKey}`, hostThemes[themeKey]); }
   let form = $state<{ kind: 'hosts' | 'projects' | 'services' | 'tools' | 'plugins'; existing?: Host | Project | Service | Tool | Plugin }>();
@@ -167,10 +158,9 @@
     const newHost = oldHost ? updated.hosts.find(item => !previous.hosts.some(old => old.id === item.id)) : undefined;
     const saved = await configuration.replace(updated, revision);
     if (oldHost && newHost) {
-      for (const prefix of ['aelab-theme:', 'aelab-tint:', 'aelab-layout:']) { const value = localStorage.getItem(prefix + oldHost.id); if (value !== null) { localStorage.setItem(prefix + newHost.id, value); localStorage.removeItem(prefix + oldHost.id); } }
+      for (const prefix of ['aelab-theme:', 'aelab-tint:']) { const value = localStorage.getItem(prefix + oldHost.id); if (value !== null) { localStorage.setItem(prefix + newHost.id, value); localStorage.removeItem(prefix + oldHost.id); } }
       const cwdPrefix = `aelab-tty-cwd-background:${oldHost.id}:`;
       for (const key of Object.keys(localStorage).filter(key => key.startsWith(cwdPrefix))) { localStorage.setItem(`aelab-tty-cwd-background:${newHost.id}:` + key.slice(cwdPrefix.length), localStorage.getItem(key)!); localStorage.removeItem(key); }
-      hostLayouts[newHost.id] = hostLayouts[oldHost.id] ?? savedLayout(newHost.id);
       hostThemes[newHost.id] = hostThemes[oldHost.id] ?? localStorage.getItem(`aelab-theme:${newHost.id}`) ?? 'dark';
       if (sectionState[oldHost.id]) { sectionState[newHost.id] = sectionState[oldHost.id]; delete sectionState[oldHost.id]; }
       if (selected === oldHost.id) choose(newHost.id);
@@ -278,12 +268,13 @@
 {:else if parsed.terminal && config?.hosts.find(h => h.id === parsed.host)}
   <Terminal tools={config.tools} launch={terminalLaunch} host={config.hosts.find(h => h.id === parsed.host)!} buttons={config.ttyButtons} {csrf} {request} />
 {:else}
-  <main class="dashboard" class:compact>
+  <main class="dashboard">
     <header class="topbar"><div class="brand"><label class="tint-trigger" title={host ? `Tint for ${host.name}` : 'Select a host to set its tint'}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
       <input type="color" aria-label="Host tint" disabled={!host} value={hostTint ?? (theme === 'dark' ? '#2dd4bf' : '#0f766e')} oninput={event => setHostTint(event.currentTarget.value)} />
-    </label><h1><a href={appPath('/')} onclick={(e) => { e.preventDefault(); choose(''); }}>aelab</a></h1></div><div class="actions"><button onclick={toggleTheme} aria-label="Toggle theme">◐</button><button onclick={toggleLayout} aria-label="Compact layout" aria-pressed={compact} title={compact ? 'Switch to normal layout' : 'Switch to compact layout'}><Icon name={compact ? 'grid' : 'rows'} /></button><button aria-label="Configuration" title="Configuration" onclick={() => editorOpen = true}><Icon name="settings" /></button><button aria-label="Sign out" title="Sign out" onclick={logout}><Icon name="logout" /></button></div></header>
-    {#if host}<div class="host-launch"><span class="host-identity">{#if observation?.platform}<small class="host-platform label-chip">{observation.platform}</small>{/if}<span class="label-chip">{observation?.hostname ?? (pending[selected] ? 'Checking hostname…' : 'Hostname unavailable')}</span></span><div class="actions"><button aria-label="Edit host" title="Edit host" onclick={() => { launchMenu = false; form = { kind: 'hosts', existing: host }; }}><Icon name="edit" /></button><div class="launch-menu" bind:this={launchContainer}><button aria-label="Host launch menu" aria-expanded={launchMenu} onclick={() => launchMenu = !launchMenu}>+</button>{#if launchMenu}<div class="launch-options"><button onclick={() => { launchMenu = false; open({}); }}>Shell</button><button onclick={() => { launchMenu = false; open({ persistent: true }); }}>tmux</button>{#if tools.some(t => t.yoloArguments)}<hr /><small>YOLO tools</small>{#each tools.filter(t => t.yoloArguments) as tool}<button disabled={!tool.directory && !observation?.home} onclick={() => { launchMenu = false; openTool(tool, true); }}>{tool.name}</button>{/each}{/if}</div>{/if}</div></div>{#if !(sectionState[selected]?.shells ?? true)}<div class="host-pin-shortcuts" aria-label="Pinned shell shortcuts">{#each pinnedShells[selected] ?? [] as pin}<a class="pin-number" href={terminalURL({ host: selected, pinned: pin.id, project: pin.project, tool: pin.tool })} target="_blank" rel="noreferrer" aria-label={`Open pinned shell ${pin.number}`} title={`Open pinned shell ${pin.number}`}>{pin.number}</a>{/each}</div>{/if}</div>{/if}
+    </label><h1><a href={appPath('/')} onclick={(e) => { e.preventDefault(); choose(''); }}>aelab</a></h1></div>{#if host}<div class="host-launch"><button aria-label="Edit host" title="Edit host" onclick={() => { launchMenu = false; form = { kind: 'hosts', existing: host }; }}><Icon name="edit" /></button><span class="host-identity">{#if observation?.platform}<small class="host-platform label-chip">{observation.platform}</small>{/if}<span class="label-chip">{observation?.hostname ?? (pending[selected] ? 'Checking hostname…' : 'Hostname unavailable')}</span></span><div class="launch-menu" bind:this={launchContainer}><button aria-label="Host launch menu" aria-expanded={launchMenu} onclick={() => launchMenu = !launchMenu}>+</button>{#if launchMenu}<div class="launch-options"><button onclick={() => { launchMenu = false; open({}); }}>Shell</button><button onclick={() => { launchMenu = false; open({ persistent: true }); }}>tmux</button>{#if tools.some(t => t.yoloArguments)}<hr /><small>YOLO tools</small>{#each tools.filter(t => t.yoloArguments) as tool}<button disabled={!tool.directory && !observation?.home} onclick={() => { launchMenu = false; openTool(tool, true); }}>{tool.name}</button>{/each}{/if}</div>{/if}</div></div>{/if}<div class="actions"><button onclick={toggleTheme} aria-label="Toggle theme">◐</button><button aria-label="Configuration" title="Configuration" onclick={() => editorOpen = true}><Icon name="settings" /></button><button aria-label="Sign out" title="Sign out" onclick={logout}><Icon name="logout" /></button></div></header>
+    {#if host && !(sectionState[selected]?.shells ?? true)}<div class="host-pin-shortcuts" aria-label="Pinned shell shortcuts">{#each pinnedShells[selected] ?? [] as pin}<a class="pin-number" href={terminalURL({ host: selected, pinned: pin.id, project: pin.project, tool: pin.tool })} target="_blank" rel="noreferrer" aria-label={`Open pinned shell ${pin.number}`} title={`Open pinned shell ${pin.number}`}>{pin.number}</a>{/each}</div>{/if}
+
     {#if error}<p class="error" role="alert">{error} <button onclick={() => error = ''}>×</button></p>{/if}
     {#if host && observation && !observation.reachable}<pre class="error" role="alert">{observation.connection.error || observation.connection.output || 'Host execution failed'}</pre>{/if}
     <HostPicker hosts={config?.hosts ?? []} {selected} expanded={sectionState[selected]?.shells ?? true} pins={pinnedShells[selected] ?? []} pinnedOnly={pinnedOnly[selected] ?? false} {observation} pending={pending[selected] ?? false} {choose} toggle={toggleShells} togglePinned={() => pinnedOnly[selected] = !pinnedOnly[selected]} add={() => { launchMenu = false; form = { kind: 'hosts' }; }} {open} {killPinned} {renameSession} {killSession} />
