@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ProgramStatusStore, programStatusReply, programStatusLabel, programStatusTone, type ProgramRecord } from './programStatus';
   import { appPath } from './basePath';
   import { keySequence } from './terminalKeys';
   import Icon from './Icon.svelte';
@@ -16,7 +17,11 @@
   function toggleHeader() { headerCollapsed = !headerCollapsed; localStorage.setItem('aelab-tty-header-collapsed', headerCollapsed ? '1' : '0'); }
   function togglePin() { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: pinned ? 'unpin' : 'pin' })); }
   const title = $derived(tools.find(tool => tool.id === activeLaunch.tool)?.name ?? host.projects.find(project => project.id === activeLaunch.project)?.name ?? activeLaunch.session ?? 'shell');
-  $effect(() => { document.title = `${title}@aelab`; });
+  const programStatuses = new ProgramStatusStore();
+  let programRecords = $state<ProgramRecord[]>([]);
+  const program = $derived(programRecords[0]);
+  function updateProgramStatus() { programRecords = programStatuses.snapshot(); }
+  $effect(() => { document.title = `${program ? `[${programStatusLabel(program)}] ` : ''}${title}@aelab`; });
   let status = $state('connecting'); let error = $state('');
   let resolvedSession = $state<string>();
   let tmuxPrefix = $state('\x02');
@@ -69,6 +74,19 @@
       try { const url = new URL(value); if (url.protocol === 'file:') cwd = decodeURIComponent(url.pathname); } catch { /* Ignore malformed host cwd metadata. */ }
       return true;
     });
+    const programHandler = term.parser.registerOscHandler(7501, value => {
+      if (value.trim() === '?') {
+        // Replies are terminal input, without sticky modifiers or focus changes.
+        if (!replaying && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data: programStatusReply }));
+      } else if (programStatuses.report(value)) updateProgramStatus();
+      return true;
+    });
+    const promptHandler = term.parser.registerOscHandler(133, value => {
+      if (value.split(';')[0] === 'A') { programStatuses.commandFinished(); updateProgramStatus(); }
+      return false;
+    });
+    const resetHandler = term.parser.registerEscHandler({ final: 'c' }, () => { programStatuses.reset(); updateProgramStatus(); return false; });
+    const key = term.onKey(() => { if (!replaying) { programStatuses.acknowledge(); updateProgramStatus(); } });
     const input = term.onData(data => { send((alt ? '\x1b' : '') + (shift && data.length === 1 ? data.toUpperCase() : data)); if (!replaying) shift = false; });
     const binaryInput = term.onBinary(data => { if (socket?.readyState === WebSocket.OPEN) socket.send(Uint8Array.from(data, char => char.charCodeAt(0))); });
     const resize = () => { fit.fit(); if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows })); };
@@ -101,10 +119,10 @@
           error = event.data;
         };
         socket.onerror = () => { error = 'Terminal connection failed'; };
-        socket.onclose = () => { status = 'disconnected'; };
+        socket.onclose = () => { if (disposed) return; status = 'disconnected'; term.write('', () => { programStatuses.commandFinished(); updateProgramStatus(); }); };
       } catch (e) { status = 'disconnected'; error = String(e); }
     })();
-    return () => { disposed = true; observer.disconnect(); input.dispose(); binaryInput.dispose(); cwdHandler.dispose(); socket?.close(); term.dispose(); };
+    return () => { disposed = true; observer.disconnect(); input.dispose(); binaryInput.dispose(); cwdHandler.dispose(); programHandler.dispose(); promptHandler.dispose(); resetHandler.dispose(); key.dispose(); socket?.close(); term.dispose(); };
   });
 </script>
 <div class="terminal-page" class:header-collapsed={headerCollapsed} style:background style:--terminal-background={background}>
@@ -120,6 +138,10 @@
   </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <div class="terminal-workspace">
+  {#if program}<details class="program-status" aria-label="Program status">
+    <summary><span class="badge" data-tone={programStatusTone(program)}>{programStatusLabel(program)}</span><span class="program-message">{program.title || program.app || title}{#if program.msg} · {program.msg}{/if}</span>{#if programRecords.length > 1}<small>{programRecords.length} reports</small>{/if}</summary>
+    <ul>{#each programRecords as record (record.id)}<li><span class="badge" data-tone={programStatusTone(record)}>{programStatusLabel(record)}</span><span>{record.title || record.app || title}{#if record.id} · {record.id}{/if}{#if record.msg} · {record.msg}{/if}</span></li>{/each}</ul>
+  </details>{/if}
   {#if keysVisible}<div class="terminal-keys" id="terminal-keybar" role="toolbar" aria-label="terminal key bar">
     {#each buttons as button}<button title={button.label} aria-label={button.label} aria-pressed={button.key === 'alt' ? alt : button.key === 'shift' ? shift : undefined} onpointerdown={event => event.preventDefault()} onclick={() => keyAction(button.key)}>{button.label}</button>{/each}
   </div>{/if}

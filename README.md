@@ -61,6 +61,8 @@ aelab tty dev --project aelab
 
 Hosts can build their own daemon with `./.ae daemon-install --endpoint https://HOST:1984 --service` (Swift and OpenSSL only). For pairing, manual updates and service templates, see [Daemon hosts](Docs/Daemon.md).
 
+Browser terminals display [program status](Docs/ProgramStatus.md) from tools that emit OSC 7501, including progress and requests for input.
+
 Before installation, use `./.ae` in place of `aelab`. See `aelab help` for configuration, diagnostics and service actions.
 
 ## Tests

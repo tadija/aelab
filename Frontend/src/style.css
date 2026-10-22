@@ -1762,3 +1762,24 @@ li[data-reorder-id] {
   .topbar>.actions { grid-column: 2; grid-row: 1; }
   .topbar>.host-launch { grid-column: 1 / -1; grid-row: 2; }
 }
+
+.program-status {
+  flex-shrink: 0;
+  color: var(--text);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: .85rem;
+}
+.program-status summary,.program-status li { display: flex; align-items: center; gap: 10px; padding: 6px 12px; }
+.program-status summary { cursor: pointer; }
+.program-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.program-status ul { max-height: 140px; overflow: auto; margin: 0; padding: 0; }
+.program-status li { overflow-wrap: anywhere; }
+.program-status li>span:last-child { min-width: 0; }
+.program-status .badge { flex-shrink: 0; }
+.program-status li { border: 0; border-radius: 0; background: transparent; margin: 0; }
+.program-status summary small { white-space: nowrap; }
+.header-collapsed .program-status summary { min-height: 53px; padding-left: 112px; }
+@media (max-width:600px) {
+  .header-collapsed .program-status summary small { display: none; }
+}

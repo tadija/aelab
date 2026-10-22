@@ -1,0 +1,63 @@
+import { chromium } from '../Frontend/node_modules/playwright/index.mjs';
+import { expect } from '../Frontend/node_modules/@playwright/test/index.mjs';
+const origin = process.env.AELAB_TEST_ORIGIN, base = '/lab/aelab';
+const browser = await chromium.launch({ headless: true, ...(process.env.AELAB_TEST_BROWSER ? { executablePath: process.env.AELAB_TEST_BROWSER } : {}) });
+try {
+  const context = await browser.newContext();
+  const page = await context.newPage(), errors = [], sent = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('websocket', socket => socket.on('framesent', event => { try { sent.push(JSON.parse(String(event.payload))); } catch {} }));
+  await page.goto(origin + base + '/hosts/local/projects/work/');
+  await page.getByLabel('Administrator password').fill(process.env.AELAB_TEST_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  const input = page.locator('.xterm-helper-textarea');
+  // A real PTY producer reads the detection response in raw mode, then accepts test commands.
+  const fixture = new URL('./program-status-fixture.py', import.meta.url).pathname;
+  const command = `python3 '${decodeURIComponent(fixture).replaceAll("'", "'\\''")}'`;
+  await input.focus(); await input.pressSequentially(command); await input.press('Enter');
+  await expect(page.locator('.xterm-rows')).toContainText('QUERY_OK');
+  const replyCount = () => sent.filter(frame => frame.type === 'input' && frame.data?.startsWith('\x1b]7501;?')).length;
+  expect(replyCount()).toBe(1);
+  const send = async command => { await input.focus(); await input.pressSequentially(command); await input.press('Enter'); };
+  const summary = page.locator('.program-status summary');
+  await send('working'); await expect(summary).toContainText('working 40%');
+  await expect(summary).toContainText('Building'); await expect(page).toHaveTitle('[working 40%] Work@aelab');
+  await send('blocked'); await expect(summary).toContainText('approval needed'); await expect(summary).toContainText('Approve?');
+  await page.locator('.program-status').evaluate(element => element.open = true);
+  await expect(page.locator('.program-status li')).toHaveCount(2);
+  await expect(page.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  await page.getByRole('button', { name: 'Collapse header', exact: true }).click();
+  await expect(summary).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(summary).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const floatingHeader = await page.locator('.terminal-header').boundingBox(), statusBadge = await summary.locator('.badge').boundingBox();
+  expect(statusBadge.x).toBeGreaterThanOrEqual(floatingHeader.x + floatingHeader.width);
+  await page.screenshot({ path: '/tmp/aelab-program-status-mobile.png' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole('button', { name: 'Expand header', exact: true }).click();
+  await page.screenshot({ path: '/tmp/aelab-program-status.png' });
+  await send('bad'); await expect(summary).toContainText('approval needed');
+  await page.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
+  await expect(page).toHaveURL(/\/tty\/pinned\//);
+  await page.reload(); await expect(summary).toContainText('approval needed');
+  expect(replyCount()).toBe(1); // A replayed detection query must never become new terminal input.
+  await send('clear-child'); await expect(summary).toContainText('working 40%');
+  await send('soft-reset'); await expect(summary).toContainText('working 40%');
+  await send('alternate'); await expect(summary).toContainText('working 40%');
+  await send('prompt'); await expect(page.locator('.program-status')).toHaveCount(0);
+  await send('done'); await expect(summary).toContainText('done');
+  await expect(page).toHaveTitle('[done] Work@aelab');
+  // Clicking the terminal does not acknowledge a result; the next key does.
+  await input.focus(); await input.press('x'); await expect(page.locator('.program-status')).toHaveCount(0);
+  await input.press('Enter');
+  await send('working'); await expect(summary).toContainText('working');
+  await send('reset'); await expect(page.locator('.program-status')).toHaveCount(0);
+  await send('working'); await expect(summary).toContainText('working');
+  await send('quit'); await input.pressSequentially('exit'); await input.press('Enter');
+  await expect(page.locator('.terminal-status')).toHaveAttribute('data-status', 'disconnected');
+  await expect(page.locator('.program-status')).toHaveCount(0);
+  expect(errors).toEqual([]);
+  console.log('PASS: real PTY OSC 7501 detection, ST/BEL, progress, blocked children, malformed reports, title, clear, prompts, reset, acknowledgement, exit and pinned replay without query replies');
+} finally { await browser.close(); }
