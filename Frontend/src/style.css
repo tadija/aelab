@@ -439,7 +439,7 @@ button:has(>.icon) {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  justify-self: center;
+  justify-self: start;
   font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 
@@ -1137,8 +1137,12 @@ button:has(>.icon) {
 
 .host-pin-shortcuts {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  overflow-x: auto;
+  max-width: 35%;
+  min-width: 0;
+  padding: 6px;
 }
 
 @media (max-width:600px) {
@@ -1161,20 +1165,6 @@ button:has(>.icon) {
   display: inline;
   margin: 0 0 0 8px;
   font: 12px -apple-system,sans-serif;
-}
-
-.discovery-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2px .35em;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.discovery-footer small {
-  margin: 0;
 }
 
 .plugin-run {
@@ -1741,20 +1731,21 @@ li[data-reorder-id] {
   overflow-wrap: break-word;
 }
 
-/* Keep host controls centered between the brand and dashboard actions. */
+/* Group host controls after the brand, with global actions on the right. */
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  grid-template-columns: auto minmax(0,1fr) auto;
 }
 .topbar>.brand { justify-self: start; }
 .topbar>.actions { grid-column: 3; justify-self: end; flex-wrap: nowrap; }
 .host-identity { min-width: 0; }
 .host-identity .label-chip { overflow-wrap: anywhere; }
-.host-pin-shortcuts { padding: 0 8px 8px; }
+.topbar>.host-launch { margin-left: 12px; padding-left: 20px; border-left: 1px solid var(--border); }
+.shell-count { font-weight: 400; letter-spacing: normal; text-transform: none; white-space: nowrap; }
 @media (max-width:700px) {
   .topbar { grid-template-columns: minmax(0,1fr) auto; }
   .topbar>.actions { grid-column: 2; grid-row: 1; }
-  .topbar>.host-launch { grid-column: 1 / -1; grid-row: 2; }
+  .topbar>.host-launch { grid-column: 1 / -1; grid-row: 2; margin-left: 0; padding-left: 0; border-left: 0; }
 }
 
 .program-status {

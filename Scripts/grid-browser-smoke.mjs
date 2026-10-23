@@ -55,18 +55,31 @@ try {
     expect(Math.abs(badge.y + badge.height / 2 - grip.y - grip.height / 2)).toBeLessThan(2);
     expect(badge.x + badge.width).toBeLessThanOrEqual(grip.x);
   }
+  const shellCount = page.locator('.shell-count');
+  await expect(shellCount).toHaveText('2 pinned · 2 tmux');
+  await page.getByRole('button', { name: 'Pinned shells only', exact: true }).click();
+  await expect(shellCount).toHaveText('2 pinned');
+  await expect(page.locator('.host-shells > ul > li')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Pinned shells only', exact: true }).click();
+  await expect(shellCount).toHaveText('2 pinned · 2 tmux');
   const hostPicker = page.getByRole('group', { name: 'Host picker' });
   const expandedTop = (await hostPicker.boundingBox()).y;
   const headingTop = (await page.locator('.dashboard > .picker-heading').boundingBox()).y;
   await page.getByRole('button', { name: 'Hide shells', exact: true }).click();
   await expect(page.getByLabel('Pinned shell shortcuts', { exact: true })).toBeVisible();
+  const shortcuts = page.getByLabel('Pinned shell shortcuts', { exact: true });
+  const shortcutsBox = await shortcuts.boundingBox(), navBox = await hostPicker.locator('nav').boundingBox(), collapseBox = await page.getByRole('button', { name: 'Show shells', exact: true }).boundingBox();
+  expect(shortcutsBox.x).toBeGreaterThanOrEqual(navBox.x + navBox.width);
+  expect(shortcutsBox.x + shortcutsBox.width).toBeLessThanOrEqual(collapseBox.x);
+  expect(shortcutsBox.y + shortcutsBox.height / 2).toBeCloseTo(collapseBox.y + collapseBox.height / 2, 0);
+
   expect((await hostPicker.boundingBox()).y).toBe(expandedTop);
   expect((await page.locator('.dashboard > .picker-heading').boundingBox()).y).toBe(headingTop);
   await page.getByRole('button', { name: 'Show shells', exact: true }).click();
   expect((await hostPicker.boundingBox()).y).toBe(expandedTop);
   const header = page.locator('.topbar');
   const brandBox = await header.locator('.brand').boundingBox(), hostBox = await header.locator('.host-launch').boundingBox(), actionsBox = await header.locator(':scope > .actions').boundingBox();
-  expect(hostBox.x + hostBox.width / 2).toBeCloseTo((await header.boundingBox()).x + (await header.boundingBox()).width / 2, 0);
+  expect(hostBox.x - brandBox.x - brandBox.width).toBeLessThan(60);
   expect(brandBox.x + brandBox.width).toBeLessThan(hostBox.x);
   expect(hostBox.x + hostBox.width).toBeLessThan(actionsBox.x);
   const hostname = header.getByRole('button', { name: 'layout-fixture', exact: true });
@@ -83,6 +96,15 @@ try {
   await expect(scriptButtons).toHaveCount(4);
   const footer = await page.locator('footer').evaluate(el => { const boxes = [...el.children].map(child => child.getBoundingClientRect()); const left = Math.min(...boxes.map(box => box.left)), right = Math.max(...boxes.map(box => box.right)); return { x: left, width: right - left }; }), section = await page.getByRole('region', { name: 'PROJECTS', exact: true }).boundingBox();
   expect(footer.x + footer.width / 2).toBeCloseTo(section.x + section.width / 2, 0);
+  const toolsSection = page.getByRole('region', { name: 'TOOLS', exact: true });
+  await expect(toolsSection.getByRole('button', { name: 'Refresh tools', exact: true })).toHaveCount(0);
+  await toolsSection.getByRole('button', { name: 'Discovery tools', exact: true }).click();
+  const refreshTools = toolsSection.locator('h2').getByRole('button', { name: 'Refresh tools', exact: true });
+  await expect(refreshTools).toBeVisible();
+  await expect(toolsSection).not.toContainText('cached for');
+  await expect(refreshTools).toBeEnabled(); await refreshTools.click();
+  await toolsSection.getByRole('button', { name: 'Discovery tools', exact: true }).click();
+  await expect(refreshTools).toHaveCount(0);
   const edit = page.getByRole('region', { name: 'TOOLS', exact: true }).getByRole('button', { name: 'Edit', exact: true }).first();
   const remove = page.getByRole('button', { name: 'Delete tool definition', exact: true }).first();
   expect(await edit.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(await remove.evaluate(el => getComputedStyle(el).backgroundColor));
@@ -148,6 +170,13 @@ try {
   await expect(page.locator('.dashboard')).toHaveCSS('padding-right', '24px');
   const mobileBrand = await header.locator('.brand').boundingBox(), mobileHost = await header.locator('.host-launch').boundingBox();
   expect(mobileHost.y).toBeGreaterThanOrEqual(mobileBrand.y + mobileBrand.height);
+  await page.getByRole('button', { name: 'Hide shells', exact: true }).click();
+  const mobilePins = await page.getByLabel('Pinned shell shortcuts', { exact: true }).boundingBox(), mobileExpand = await page.getByRole('button', { name: 'Show shells', exact: true }).boundingBox();
+  expect(mobilePins.x + mobilePins.width).toBeLessThanOrEqual(mobileExpand.x);
+  expect(mobilePins.y + mobilePins.height / 2).toBeCloseTo(mobileExpand.y + mobileExpand.height / 2, 0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/aelab-host-shortcuts-mobile.png' });
+  await page.getByRole('button', { name: 'Show shells', exact: true }).click();
   await page.screenshot({ path: '/tmp/aelab-grid-mobile.png', fullPage: true });
   expect(mobile[0].x).toBe(mobile[1].x); expect(mobile[1].y).toBeGreaterThan(mobile[0].y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -155,5 +184,5 @@ try {
   const finalConfig = await (await context.request.get(origin + base + '/api/config')).json();
   expect(finalConfig.config.layout).toBeUndefined();
   expect(errors).toEqual([]);
-  console.log('PASS: responsive 1–8-column default grid across all sections/discovery, centered host header, long-label wrapping, per-host theme, two-line badges, centered footer, cross-row reordering, host switching and mobile fallback');
+  console.log('PASS: responsive 1–8-column default grid across all sections/discovery, left-aligned host header, shell counts and inline pinned shortcuts, discovery refresh, long-label wrapping, per-host theme, two-line badges, centered footer, cross-row reordering, host switching and mobile fallback');
 } finally { await browser.close(); }
