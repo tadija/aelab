@@ -10,6 +10,9 @@ export type Result = { status: number; output: string; error: string; truncated:
 export type Discovery = { provider: Service['provider']; target: string; state: string; composeProject?: string; image?: string };
 export type Observation = { projectBranches?: Record<string, string>; home?: string; hostname?: string; platform?: string; host: string;  checked: string; reachable: boolean; staleAfterSeconds: number; connection: Result; systemd?: Result; launchd?: Result; docker?: Result; tmux?: Result; discovered: Discovery[]; curated: Record<string, Result> };
 export type Launch = { directory?: string; host: string; pinned?: string;  project?: string; tool?: string; session?: string; persistent?: boolean; yolo?: boolean; window?: string };
+export function terminalName(launch: Pick<Launch, 'tool' | 'project' | 'session'>, host: Host, tools: Tool[]): string {
+  return tools.find(tool => tool.id === launch.tool)?.name ?? host.projects.find(project => project.id === launch.project)?.name ?? launch.session ?? 'shell';
+}
 export function route(path: string): { host?: string; terminal: boolean; project?: string; tool?: string; session?: string; service?: string; pinned?: string; window?: string } {
   const p = relativePath(path).split('/').filter(Boolean).map(decodeURIComponent);
   return { host: p[0] === 'hosts' ? p[1] : undefined, terminal: p[2] === 'tty' || p[2] === 'tools' || p[2] === 'projects', project: p[2] === 'projects' ? p[3] : undefined, tool: p[2] === 'tools' ? p[3] : undefined, session: p[3] === 'tmux' ? p[4] : undefined, pinned: p[3] === 'pinned' ? p[4] : undefined, service: p[2] === 'services' ? p[3] : undefined, window: p[5] };

@@ -33,6 +33,7 @@ try {
   await expect(shell.locator('.xterm-rows > div').filter({ hasText: /^PIN_READY\s*$/ }).last()).toBeVisible();
   await shell.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
   await expect(page.locator('.pinned-row')).toHaveCount(1, { timeout: 1000 });
+  await expect(page.locator('.pinned-row .row-title')).toHaveText('shell@aelab');
   await expect(refresh).toBeDisabled(); // Pin updates must not wait for the blocked host probe.
   await expect(shell.getByRole('button', { name: 'Unpin terminal session', exact: true })).toBeVisible();
 

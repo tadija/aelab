@@ -9,7 +9,7 @@ try {
   // Display fixtures keep this layout check independent of machine services and sessions.
   const result = { status: 0, output: '', error: '', truncated: false };
   await page.route('**/api/hosts/*/status', route => route.fulfill({ json: { host: 'local', hostname: 'layout-fixture', platform: 'linux', reachable: true, checked: new Date().toISOString(), staleAfterSeconds: 60, connection: result, tmux: { ...result, output: 'one|1|0\ntwo|1|0' }, discovered: [{ provider: 'systemd', target: 'discovered-one.service', state: 'running' }, { provider: 'systemd', target: 'discovered-two.service', state: 'running' }], curated: {}, projectBranches: { work: 'feature/Case-Sensitive', 'work-two': 'main', 'work-three': 'feature/a-very-long-branch-name-for-layout' } } }));
-  await page.route('**/api/hosts/*/terminals', route => route.fulfill({ json: [{ id: 'one', number: 1, host: 'local', cwd: '/fixture/one' }, { id: 'two', number: 2, host: 'local', cwd: '/fixture/two' }] }));
+  await page.route('**/api/hosts/*/terminals', route => route.fulfill({ json: [{ id: 'one', number: 1, host: 'local', tool: 'codex', project: 'work', cwd: '/fixture/one' }, { id: 'two', number: 2, host: 'local', project: 'work', cwd: '/fixture/two' }] }));
   await page.goto(origin + base + '/hosts/local/');
   await page.getByLabel('Administrator password').fill(process.env.AELAB_TEST_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -42,6 +42,7 @@ try {
   };
   for (const name of ['PROJECTS', 'TOOLS', 'SERVICES', 'PLUGINS']) await assertGrid(page.getByRole('region', { name, exact: true }).locator('ul'));
   await assertGrid(page.locator('.host-shells > ul'));
+  await expect(page.locator('.pinned-row .row-title')).toHaveText(['Codex@aelab', 'Work@aelab']);
   const branch = projectList.locator('li').filter({ has: page.getByRole('link', { name: 'Work', exact: true }) }).locator('.git-badge');
   await expect(branch).toHaveText('feature/Case-Sensitive');
   await expect(projectList.locator('li').filter({ has: page.getByRole('link', { name: 'Work Four', exact: true }) }).locator('.git-badge')).toHaveCount(0);
