@@ -11,6 +11,10 @@ try {
   await page.getByLabel('Administrator password').fill(process.env.AELAB_TEST_PASSWORD);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  await page.evaluate(() => localStorage.setItem('aelab-tint:local', '#bc78ef'));
+  await page.reload();
+  await expect(page.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  await expect(page.locator('.terminal-logo')).toHaveCSS('color', 'rgb(188, 120, 239)');
   const input = page.locator('.xterm-helper-textarea');
   // A real PTY producer reads the detection response in raw mode, then accepts test commands.
   const fixture = new URL('./program-status-fixture.py', import.meta.url).pathname;
@@ -40,12 +44,15 @@ try {
   await page.getByRole('button', { name: 'Expand header', exact: true }).click();
   expect(await summary.evaluate(element => getComputedStyle(element.parentElement).backgroundColor)).toBe(await page.locator('.terminal-header').evaluate(element => getComputedStyle(element).backgroundColor));
   await expect(page.locator('.terminal-logo circle')).toHaveCount(2);
+  await expect(page.locator('.terminal-logo')).toHaveCSS('filter', 'none');
+  await expect(page.locator('.terminal-logo')).toHaveCSS('width', '24px');
+  await expect(page.locator('.terminal-logo')).toHaveCSS('height', '24px');
   await expect(page.locator('.terminal-color')).toHaveCount(0);
   const picker = page.locator('.terminal-cwd input[type=color]');
   await picker.fill('#345678'); await picker.dispatchEvent('input');
-  await expect(page.locator('.terminal-logo')).toHaveCSS('color', 'rgb(52, 86, 120)');
+  await expect(page.locator('.terminal-logo')).toHaveCSS('color', 'rgb(188, 120, 239)');
   await page.getByRole('button', { name: 'Reset terminal background', exact: true }).click();
-  await expect(page.locator('.terminal-logo')).toHaveCSS('color', 'rgb(11, 15, 13)');
+  await expect(page.locator('.terminal-logo')).toHaveCSS('color', 'rgb(188, 120, 239)');
   await page.screenshot({ path: '/tmp/aelab-program-status.png' });
   await send('bad'); await expect(summary).toContainText('approval needed');
   await page.getByRole('button', { name: 'Pin terminal session', exact: true }).click();

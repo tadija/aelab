@@ -22,7 +22,7 @@ python3 -m unittest discover -s Scripts -p 'test_api_docs.py'
 | Swift tests | Name-derived identities/collisions, rename isolation, configuration validation/conflicts, authentication, host isolation, SSH policy, service adapters, concurrent host discovery, read-only Git branches/detached HEAD, PTYs, terminal ownership, safe paths, plugins and installation |
 | Frontend tests | Routing, terminal input, discovery states, name-only payloads/references, config update ordering, editor folding/wrapping and row reordering |
 | `python3 Scripts/smoke.py` | HTTP authentication, Origin/CSRF and distinct error codes across every host route, config persistence, host boundaries, startup asset consistency and grouped API reference |
-| `python3 Scripts/run-smoke.py` | First-run setup, `--debug`, updates, installation and operation without the checkout; build commands are recorded stand-ins |
+| `python3 Scripts/run-smoke.py` | First-run setup, debug/release configuration, updates, installation and operation without the checkout; build commands are recorded stand-ins |
 | `python3 Scripts/ssh-fixture-smoke.py` | Two disposable SSH endpoints plus local execution: CLI, browser, terminal clipboard/resize/pinning/tmux, configuration forms, theme, Git branches, directory picker, script deployment/editing and real example probes |
 | `AELAB_TEST_DAEMON=1 python3 Scripts/ssh-fixture-smoke.py` | Manual host installation without OS service changes, then the full suite with one SSH host, one direct daemon and native localhost |
 | `python3 Scripts/daemon-smoke.py` | Direct TLS without SSH: pairing, certificate/auth/Origin rejection, multiplexed commands, discovery/plugins, native PTY/resize, timeouts and protocol bounds |

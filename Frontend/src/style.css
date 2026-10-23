@@ -283,11 +283,6 @@ form .actions {
   cursor: pointer;
 }
 
-.tint-trigger svg {
-  width: 24px;
-  height: 24px;
-}
-
 .tint-trigger input[type=color] {
   position: absolute;
   inset: 0;
@@ -821,8 +816,6 @@ button:has(>.icon) {
   color: var(--text);
   white-space: nowrap;
 }
-
-.terminal-logo { width: 24px; height: 24px; flex-shrink: 0; filter: drop-shadow(0 0 1px var(--muted)); }
 
 .terminal-meta {
   display: flex;
@@ -1646,49 +1639,55 @@ li[data-reorder-id] {
   overflow-wrap: anywhere;
 }
 
-@media (min-width:601px) {
+.dashboard {
+  width: 100%;
+  max-width: 2568px;
+  padding-inline: clamp(24px,4vw,48px);
+  container-type: inline-size;
+}
+
+/* Use the available content width, leaving about 300px per card. */
+.dashboard section>ul,.dashboard .host-shells>ul {
+  grid-template-columns: minmax(0,1fr);
+}
+
+@container (min-width:610px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(2,minmax(0,1fr));
   }
 }
 
-@media (min-width:1200px) {
-  .dashboard { max-width: 1080px; }
+@container (min-width:920px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(3,minmax(0,1fr));
   }
 }
 
-@media (min-width:1560px) {
-  .dashboard { max-width: 1440px; }
+@container (min-width:1230px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(4,minmax(0,1fr));
   }
 }
 
-@media (min-width:1920px) {
-  .dashboard { max-width: 1800px; }
+@container (min-width:1540px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(5,minmax(0,1fr));
   }
 }
 
-@media (min-width:2280px) {
-  .dashboard { max-width: 2160px; }
+@container (min-width:1850px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(6,minmax(0,1fr));
   }
 }
 
-@media (min-width:2640px) {
-  .dashboard { max-width: 2520px; }
+@container (min-width:2160px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(7,minmax(0,1fr));
   }
 }
 
-@media (min-width:3000px) {
-  .dashboard { max-width: 2880px; }
+@container (min-width:2470px) {
   .dashboard section>ul,.dashboard .host-shells>ul {
     grid-template-columns: repeat(8,minmax(0,1fr));
   }

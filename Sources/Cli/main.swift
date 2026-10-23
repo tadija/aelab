@@ -179,7 +179,7 @@ import Darwin
           tty HOST [--project ID] [--tool ID] [--session NAME] [--persistent] [--yolo]
           daemon pair HOST --file PAIRING.json
           doctor                       configuration and read-only host diagnostics
-        Repository build/start/update: ./.ae run [--debug | --configuration debug|release] [--home PATH] [--port PORT]
+        Repository build/start/update: ./.ae run [--configuration debug|release] [--home PATH] [--port PORT]
         Install release binaries and assets: ./.ae install [--prefix PATH]
         Install only this host’s daemon: ./.ae daemon-install --endpoint https://HOST:1984 [--service]
         Uses shared core and explicit local/SSH/daemon execution; no running dashboard required.

@@ -6,7 +6,7 @@ Built with Swift/Hummingbird, Svelte 5 and xterm.js. The CLI works independently
 
 ## Features
 
-- Projects, shared tools and plugins, enabled per host; per-host themes and responsive normal/compact layouts.
+- Projects, shared tools and plugins, enabled per host; per-host themes and an adaptive 1–8-column grid.
 - systemd, launchd, Docker and Compose status, logs and lifecycle controls.
 - Browser shells, pinned terminals and persistent tmux sessions, with deep links, clipboard and custom colors.
 - Configuration forms and a validated file editor; host directory picker and script editing/deployment.
@@ -14,29 +14,55 @@ Built with Swift/Hummingbird, Svelte 5 and xterm.js. The CLI works independently
 
 ## Build and run
 
-Requires Swift 6.4+, Node 24+, Python 3 and SSH access to remote hosts. macOS requires 14+. Persistent tmux sessions require tmux on the selected host.
+Bring Swift 6.4+, Node 26+, Python 3 and Git. Runs on macOS 14+ and Linux. Remote SSH hosts need SSH access; persistent sessions need tmux on the selected host.
+
+### Clone, run, explore
 
 ```sh
+git clone https://github.com/tadija/aelab.git
+cd aelab
 ./.ae run
 ```
 
-This builds aelab, prepares `$AELAB_HOME` (default `~/.aelab`), asks for an admin password on first setup, and starts at <http://localhost:2108>. Existing configuration and credentials are preserved; new configurations include localhost.
+Open <http://localhost:2108> and sign in. On the first run, aelab builds everything, adds localhost and asks you to set an admin password. Your lab starts here—add a host, a project, or open a shell with **+**.
 
-Hosting under `/aelab/`? Set `AELAB_BASE_PATH=/aelab`; see [URL prefixes](Docs/Installation.md#url-prefix).
+Configuration and credentials live in `~/.aelab` (`$AELAB_HOME`), separate from the checkout. Stop with Ctrl+C. Running `./.ae run` again rebuilds and starts the server while keeping your setup.
 
-Use `--debug` (or `--configuration debug`) for debug builds and frontend sourcemaps; release is the default. Use `--home PATH` or `--port PORT` for custom settings.
+Release builds are the default. Use `./.ae run --configuration debug` for debug builds and frontend sourcemaps. Use `--home PATH` or `--port PORT` to choose a different home or port. Hosting under `/aelab/`? Set `AELAB_BASE_PATH=/aelab`; see [URL prefixes](Docs/Installation.md#url-prefix).
 
-### Install
+### Install once, run from anywhere
+
+From the checkout:
 
 ```sh
 ./.ae install
+export PATH="$HOME/.local/bin:$PATH"
 aelab help
 aelab run
 ```
 
-Installs the CLI, server and dashboard assets to `~/.local/bin` and `$XDG_DATA_HOME/aelab` (default `~/.local/share/aelab`). Add `~/.local/bin` to PATH, or use `--prefix PATH` for `PATH/bin` and `PATH/share/aelab`.
+Installation builds and copies the CLI, server and dashboard to `~/.local/bin` and `$XDG_DATA_HOME/aelab` (default `~/.local/share/aelab`). Add the PATH line to your shell configuration to keep it. For a custom destination, use `./.ae install --prefix PATH`, then add `PATH/bin` to PATH; assets go to `PATH/share/aelab`.
 
-Installed aelab needs no source checkout, Swift or Node. To update, stop the server, pull changes and run `./.ae install` again.
+Stop any checkout-run server before starting the installed one. Both use the same configuration home by default. Installed aelab runs without the checkout or build tools; Linux still needs the Swift runtime libraries.
+
+### Keep it fresh
+
+Stop the running server, then return to your checkout:
+
+```sh
+cd aelab # or wherever you cloned it
+git pull
+./.ae run
+```
+
+For an installed copy, use these last two steps instead of `./.ae run`:
+
+```sh
+./.ae install
+aelab run
+```
+
+Use the same `--prefix`, home and port options as before if you customized them. Your configuration and credentials stay put.
 
 ### Manual build and run
 

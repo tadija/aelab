@@ -2,7 +2,7 @@
 
 ## Run and install
 
-`./.ae run` builds and starts aelab at <http://localhost:2108>, using `~/.aelab` by default. First run adds localhost and asks for an administrator password. Options: `--debug`, `--home PATH`, `--port PORT`. Stop with Ctrl+C before pulling updates and running again. Existing configuration and credentials are preserved. Manual build commands are in [README](../README.md).
+`./.ae run` builds and starts aelab at <http://localhost:2108>, using `~/.aelab` by default. First run adds localhost and asks for an administrator password. Options: `--configuration debug|release`, `--home PATH`, `--port PORT`. Stop with Ctrl+C before pulling updates and running again. Existing configuration and credentials are preserved. Manual build commands are in [README](../README.md).
 
 `./.ae install` installs the CLI, server and dashboard. Both macOS and Linux use `~/.local/bin` and `$XDG_DATA_HOME/aelab`, defaulting to `~/.local/share/aelab`. Only absolute XDG paths are honored. `--prefix PATH` overrides these with `PATH/bin` and `PATH/share/aelab`. Add the command directory to PATH, then use `aelab run`. Installed operation needs no checkout or build tools; updates require rebuilding and reinstalling. Installation always uses release builds and never edits shell files, enables services or elevates privileges.
 

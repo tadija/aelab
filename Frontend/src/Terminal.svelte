@@ -3,12 +3,13 @@
   import { appPath } from './basePath';
   import { keySequence } from './terminalKeys';
   import Icon from './Icon.svelte';
+  import Logo from './Logo.svelte';
   import { onMount, untrack } from 'svelte';
   import { Terminal } from '@xterm/xterm';
   import { FitAddon } from '@xterm/addon-fit';
   import '@xterm/xterm/css/xterm.css';
   import { shouldCopy, terminalURL, prefixBytes, type Launch, type Host, type Tool, type TTYButton } from './model';
-  let { launch, host, tools, buttons, csrf, request }: { launch: Launch; host: Host; tools: Tool[]; buttons: TTYButton[]; csrf: string; request: <T>(path: string, method?: string, body?: unknown) => Promise<T> } = $props();
+  let { launch, host, logoColor, tools, buttons, csrf, request }: { launch: Launch; host: Host; logoColor: string; tools: Tool[]; buttons: TTYButton[]; csrf: string; request: <T>(path: string, method?: string, body?: unknown) => Promise<T> } = $props();
   let container: HTMLDivElement;
   let headerCollapsed = $state(localStorage.getItem('aelab-tty-header-collapsed') === '1');
   let keysVisible = $state(false); let pinned = $state(false); let terminalID = $state('');
@@ -127,7 +128,7 @@
 </script>
 <div class="terminal-page" class:header-collapsed={headerCollapsed} style:background style:--terminal-background={background}>
   <header class="terminal-header">
-    <div class="terminal-header-left"><a class="terminal-brand" href={appPath(`/hosts/${host.id}/`)} title="Open host root"><svg class="terminal-logo" viewBox="0 0 24 24" style:color={background} aria-label={`Terminal background ${background}`} role="img"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>aelab</a>
+    <div class="terminal-header-left"><a class="terminal-brand" href={appPath(`/hosts/${host.id}/`)} title="Open host root"><Logo class="terminal-logo" color={logoColor} label={`Host tint ${logoColor}`} />aelab</a>
       <button class="terminal-circle header-toggle" aria-expanded={!headerCollapsed} aria-label={headerCollapsed ? 'Expand header' : 'Collapse header'} title={headerCollapsed ? 'Expand header' : 'Collapse header'} onclick={toggleHeader}><Icon name="chevron" /></button>
       <div class="terminal-meta"><span><button class="host-background-reset" title="Reset to host terminal background" aria-label="Reset terminal background" onclick={resetBackground}>host</button>{#if platform}<small class="terminal-platform label-chip">{platform}</small>{/if}<code class="label-chip">{hostname}</code></span><span class="terminal-cwd"><label title="Change cwd terminal background">cwd<input type="color" aria-label="background" value={background} disabled={!cwd} oninput={event => tint(event.currentTarget.value)} /></label><code class="label-chip" title={cwd}>{cwd || '…'}</code></span></div>
     </div>

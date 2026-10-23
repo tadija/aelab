@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { ConfigurationClient, RequestError } from './configuration';
   import Icon from './Icon.svelte';
+  import Logo from './Logo.svelte';
   import Reorder from './Reorder.svelte';
   import DirectoryPicker from './DirectoryPicker.svelte';
   import PluginDeployment from './PluginDeployment.svelte';
@@ -264,13 +265,13 @@
 <svelte:window onpointerdown={dismissLaunch} onkeydown={event => { if (event.key === 'Escape') { launchMenu = false; shortcutDigits = ''; clearTimeout(shortcutTimer); } else pinnedShortcut(event); }} />
 {#if loading}<main class="loading-page"><div class="loading-state" role="status"><span class="loader" aria-hidden="true"></span><span>Loading aelab…</span></div></main>
 {:else if !authenticated}
-  <main class="login"><div class="brand"><span class="tint-trigger" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><h1>aelab</h1></div><p class="muted">central host console</p><form class="login-form" onsubmit={login}><input type="password" aria-label="Administrator password" placeholder="Password" autocomplete="current-password" required bind:value={password} /><button>Sign in</button></form>{#if error}<p class="error">{error}</p>{/if}</main>
+  <main class="login"><div class="brand"><span class="tint-trigger" aria-hidden="true"><Logo /></span><h1>aelab</h1></div><p class="muted">central host console</p><form class="login-form" onsubmit={login}><input type="password" aria-label="Administrator password" placeholder="Password" autocomplete="current-password" required bind:value={password} /><button>Sign in</button></form>{#if error}<p class="error">{error}</p>{/if}</main>
 {:else if parsed.terminal && config?.hosts.find(h => h.id === parsed.host)}
-  <Terminal tools={config.tools} launch={terminalLaunch} host={config.hosts.find(h => h.id === parsed.host)!} buttons={config.ttyButtons} {csrf} {request} />
+  <Terminal logoColor={hostTint ?? (theme === 'dark' ? '#a4afba' : '#57534e')} tools={config.tools} launch={terminalLaunch} host={config.hosts.find(h => h.id === parsed.host)!} buttons={config.ttyButtons} {csrf} {request} />
 {:else}
   <main class="dashboard">
     <header class="topbar"><div class="brand"><label class="tint-trigger" title={host ? `Tint for ${host.name}` : 'Select a host to set its tint'}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+      <Logo />
       <input type="color" aria-label="Host tint" disabled={!host} value={hostTint ?? (theme === 'dark' ? '#2dd4bf' : '#0f766e')} oninput={event => setHostTint(event.currentTarget.value)} />
     </label><h1><a href={appPath('/')} onclick={(e) => { e.preventDefault(); choose(''); }}>aelab</a></h1></div>{#if host}<div class="host-launch"><span class="host-identity">{#if observation?.platform}<small class="host-platform label-chip">{observation.platform}</small>{/if}<button class="label-chip" title="Edit host" onclick={() => { launchMenu = false; form = { kind: 'hosts', existing: host }; }}>{observation?.hostname ?? (pending[selected] ? 'Checking hostname…' : 'Hostname unavailable')}</button></span><div class="launch-menu" bind:this={launchContainer}><button aria-label="Host launch menu" aria-expanded={launchMenu} onclick={() => launchMenu = !launchMenu}>+</button>{#if launchMenu}<div class="launch-options"><button onclick={() => { launchMenu = false; open({}); }}>Shell</button><button onclick={() => { launchMenu = false; open({ persistent: true }); }}>tmux</button>{#if tools.some(t => t.yoloArguments)}<hr /><small>YOLO tools</small>{#each tools.filter(t => t.yoloArguments) as tool}<button disabled={!tool.directory && !observation?.home} onclick={() => { launchMenu = false; openTool(tool, true); }}>{tool.name}</button>{/each}{/if}</div>{/if}</div></div>{/if}<div class="actions"><button onclick={toggleTheme} aria-label="Toggle theme">◐</button><button aria-label="Configuration" title="Configuration" onclick={() => editorOpen = true}><Icon name="settings" /></button><button aria-label="Sign out" title="Sign out" onclick={logout}><Icon name="logout" /></button></div></header>
 

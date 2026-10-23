@@ -44,7 +44,7 @@ def main():
             master, slave = pty.openpty()
             command_env = dict(env)
             if attempt < 2:
-                arguments = ['run', '--home', str(home)] if attempt == 0 else ['--home', 'private home', 'run', '--debug']
+                arguments = ['run', '--home', str(home)] if attempt == 0 else ['--home', 'private home', 'run', '--configuration', 'debug']
                 command = [str(ROOT / '.ae'), *arguments, '--port', str(port)]
             else:
                 prefix = root / 'installed application'

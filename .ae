@@ -21,7 +21,6 @@ case "${1:-}" in
     shift
     validate_options() {
       while [ "$#" -gt 0 ]; do
-        if [ "$operation:$1" = "run:--debug" ]; then build_configuration=debug; shift; continue; fi
         if [ "$#" -lt 2 ]; then printf '%s\n' 'An option value is missing' >&2; exit 1; fi
         case "$operation:$1" in
           run:--home|install:--prefix) [ -n "$2" ] || { printf '%s\n' 'Path must not be empty' >&2; exit 1; } ;;
@@ -30,7 +29,7 @@ case "${1:-}" in
           run:--port)
             case "$2" in ''|*[!0-9]*) printf '%s\n' 'Invalid port' >&2; exit 1 ;; esac
             if [ "${#2}" -gt 5 ] || [ "$2" -lt 1 ] || [ "$2" -gt 65535 ]; then printf '%s\n' 'Invalid port' >&2; exit 1; fi ;;
-          *) printf '%s\n' 'Use ./.ae run [--debug | --configuration debug|release] [--home PATH] [--port PORT] or ./.ae install [--prefix PATH]' >&2; exit 1 ;;
+          *) printf '%s\n' 'Use ./.ae run [--configuration debug|release] [--home PATH] [--port PORT] or ./.ae install [--prefix PATH]' >&2; exit 1 ;;
         esac
         shift 2
       done
@@ -47,9 +46,8 @@ case "${1:-}" in
     # Build configuration belongs to this repository wrapper, not the installed CLI.
     filtered_count=$#
     while [ "$filtered_count" -gt 0 ]; do
-      flag=$1; shift; filtered_count=$((filtered_count - 1))
-      if [ "$flag" = "--debug" ]; then continue; fi
-      value=$1; shift; filtered_count=$((filtered_count - 1))
+      flag=$1; value=$2; shift 2
+      filtered_count=$((filtered_count - 2))
       if [ "$flag" != "--configuration" ]; then set -- "$@" "$flag" "$value"; fi
     done
     exec "$root/.build/$build_configuration/aelab" run "$@"
