@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ProgramStatusStore, programStatusReply, programStatusLabel, programStatusTone, type ProgramRecord } from './programStatus';
+  import { terminalEvents } from './terminalEvents';
   import { appPath } from './basePath';
   import { keySequence } from './terminalKeys';
   import Icon from './Icon.svelte';
@@ -64,6 +65,7 @@
   async function paste() { try { term.paste(await navigator.clipboard.readText()); } catch { error = 'Clipboard permission denied; use Ctrl+Shift+V or the browser paste menu.'; } }
   onMount(() => {
     let disposed = false;
+    const events = terminalEvents();
     term = new Terminal({ cursorBlink: true, macOptionClickForcesSelection: true, altClickMovesCursor: false, fontSize: 14, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", monospace', scrollback: 10000, theme: { background, foreground: '#d8e6df', cursor: '#34d399', selectionBackground: '#245747' }, allowProposedApi: false });
     fit = new FitAddon(); term.loadAddon(fit); term.open(container); fit.fit();
     term.attachCustomKeyEventHandler(event => {
@@ -112,7 +114,9 @@
             if (metadata.type === 'replay') { replayNext = true; return; }
             if (metadata.type === 'terminal') {
               if (metadata.identity) { hostname = metadata.identity.hostname; platform = metadata.identity.platform; }
+              const pinChanged = pinned !== metadata.pinned || (metadata.pinned && terminalID !== metadata.id);
               terminalID = metadata.id; pinned = metadata.pinned; cwd = metadata.cwd; activeLaunch = metadata.launch;
+              if (pinChanged) events.changed(host.id);
               history.replaceState({}, '', terminalURL({ ...activeLaunch, pinned: pinned ? terminalID : undefined, persistent: false }));
               return;
             }
@@ -120,10 +124,10 @@
           error = event.data;
         };
         socket.onerror = () => { error = 'Terminal connection failed'; };
-        socket.onclose = () => { if (disposed) return; status = 'disconnected'; term.write('', () => { programStatuses.commandFinished(); updateProgramStatus(); }); };
+        socket.onclose = () => { if (disposed) return; events.changed(host.id); status = 'disconnected'; term.write('', () => { programStatuses.commandFinished(); updateProgramStatus(); }); };
       } catch (e) { status = 'disconnected'; error = String(e); }
     })();
-    return () => { disposed = true; observer.disconnect(); input.dispose(); binaryInput.dispose(); cwdHandler.dispose(); programHandler.dispose(); promptHandler.dispose(); resetHandler.dispose(); key.dispose(); socket?.close(); term.dispose(); };
+    return () => { disposed = true; events.close(); observer.disconnect(); input.dispose(); binaryInput.dispose(); cwdHandler.dispose(); programHandler.dispose(); promptHandler.dispose(); resetHandler.dispose(); key.dispose(); socket?.close(); term.dispose(); };
   });
 </script>
 <div class="terminal-page" class:header-collapsed={headerCollapsed} style:background style:--terminal-background={background}>

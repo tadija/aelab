@@ -30,6 +30,7 @@ python3 -m unittest discover -s Scripts -p 'test_api_docs.py'
 | `python3 Scripts/base-path-smoke.py` | Nested runtime prefix, browser assets/deep links, scoped auth cookies, Origin checks, API docs and real terminal WebSocket |
 | `AELAB_TEST_BROWSER_SCRIPT=grid-browser-smoke.mjs python3 Scripts/base-path-smoke.py` | Responsive 1–8-column cards in all sections/discovery, left-aligned host header, inline pinned shortcuts, shell counts, discovery refresh, per-host theme, row badge alignment, footer centering, reordering, narrow-screen fallback and long-label wrapping |
 | `AELAB_TEST_BROWSER_SCRIPT=program-status-browser-smoke.mjs python3 Scripts/base-path-smoke.py` | Real PTY capability replies, program progress/input requests, tab titles, validation, prompt/reset/exit lifetimes and pinned replay |
+| `AELAB_TEST_BROWSER_SCRIPT=pin-responsiveness-browser-smoke.mjs python3 Scripts/base-path-smoke.py` | Pin/unpin/exit cross-tab updates during blocked host probes, immediate numeric launches and terminal startup without dashboard section reads |
 | API contract checks | HTTP route coverage, schema references, required path parameters, unique operations, sorted output and synchronized embedding |
 | `git diff --check` | Whitespace |
 

@@ -644,7 +644,7 @@ try {
       if (numberBox.x - badgeBox.x - badgeBox.width > 12) throw new Error('Pin number is separated by a spacer');
       await expect(page.locator('.host-shells .pin-number')).toHaveCSS('border-radius', '50%');
       await page.getByRole('button', { name: 'Hide shells', exact: true }).click();
-      const collapsedPin = page.locator('.host-launch').getByRole('link', { name: `Open pinned shell ${pins[0].number}`, exact: true });
+      const collapsedPin = page.locator('.host-picker-row').getByRole('link', { name: `Open pinned shell ${pins[0].number}`, exact: true });
       await expect(collapsedPin).toBeVisible();
       const collapsedPage = context.waitForEvent('page'); await collapsedPin.click();
       const collapsedTerminal = await collapsedPage; await collapsedTerminal.getByText('connected', { exact: true }).waitFor(); await collapsedTerminal.close();

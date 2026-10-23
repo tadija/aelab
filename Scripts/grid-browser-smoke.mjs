@@ -96,6 +96,12 @@ try {
   await expect(scriptButtons).toHaveCount(4);
   const footer = await page.locator('footer').evaluate(el => { const boxes = [...el.children].map(child => child.getBoundingClientRect()); const left = Math.min(...boxes.map(box => box.left)), right = Math.max(...boxes.map(box => box.right)); return { x: left, width: right - left }; }), section = await page.getByRole('region', { name: 'PROJECTS', exact: true }).boundingBox();
   expect(footer.x + footer.width / 2).toBeCloseTo(section.x + section.width / 2, 0);
+  const servicesSection = page.getByRole('region', { name: 'SERVICES', exact: true });
+  await expect(servicesSection.getByRole('button', { name: 'Refresh services', exact: true })).toHaveCount(0);
+  await servicesSection.getByRole('button', { name: 'Discovery services', exact: true }).click();
+  await expect(servicesSection.locator('h2').getByRole('button', { name: 'Refresh services', exact: true })).toBeVisible();
+  await expect(servicesSection.locator('.discovery-filter').getByRole('button', { name: 'Refresh services', exact: true })).toHaveCount(0);
+  await servicesSection.getByRole('button', { name: 'Discovery services', exact: true }).click();
   const toolsSection = page.getByRole('region', { name: 'TOOLS', exact: true });
   await expect(toolsSection.getByRole('button', { name: 'Refresh tools', exact: true })).toHaveCount(0);
   await toolsSection.getByRole('button', { name: 'Discovery tools', exact: true }).click();
