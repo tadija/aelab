@@ -17,7 +17,7 @@
       "projects": [
         {
           "name": "aelab",
-          "directory": "/srv/aelab",
+          "dir": "/srv/aelab",
           "session": "aelab"
         }
       ],
@@ -43,7 +43,7 @@
       "projects": [
         {
           "name": "Application",
-          "directory": "/srv/app",
+          "dir": "/srv/app",
           "session": "app"
         }
       ],
@@ -137,10 +137,12 @@
       "name": "Codex",
       "executable": "codex",
       "arguments": [],
+      "altArguments": [
+        "resume"
+      ],
       "yoloArguments": [
         "--dangerously-bypass-approvals-and-sandbox"
-      ],
-      "session": "codex"
+      ]
     },
     {
       "name": "Approved host diagnostic",

@@ -1,20 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Replace /ABSOLUTE/HOME, copy to ~/Library/LaunchAgents/dev.aelab.daemon.plist,
-     then: launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.aelab.daemon.plist" -->
+     create ~/.aelab/daemon/logs first, then: launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.aelab.daemon.plist" -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>dev.aelab.daemon</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/ABSOLUTE/HOME/.aelab/daemon/aelab-daemon</string>
+    <string>/ABSOLUTE/HOME/.local/bin/aelab-daemon</string>
     <string>--home</string><string>/ABSOLUTE/HOME/.aelab/daemon</string>
-    <string>run</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>Umask</key><integer>63</integer>
-  <key>StandardOutPath</key><string>/ABSOLUTE/HOME/.aelab/daemon/stdout.log</string>
-  <key>StandardErrorPath</key><string>/ABSOLUTE/HOME/.aelab/daemon/stderr.log</string>
+  <key>StandardOutPath</key><string>/ABSOLUTE/HOME/.aelab/daemon/logs/daemon.stdout.log</string>
+  <key>StandardErrorPath</key><string>/ABSOLUTE/HOME/.aelab/daemon/logs/daemon.stderr.log</string>
 </dict>
 </plist>

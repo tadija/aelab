@@ -51,11 +51,18 @@ public struct DaemonMessage: Codable, Sendable {
     public var rows: Int?
     public var result: CommandResult?
     public var error: String?
-    public init(id: String = UUID().uuidString, operation: String, script: String? = nil, timeout: Double? = nil, data: Data? = nil, cols: Int? = nil, rows: Int? = nil, result: CommandResult? = nil, error: String? = nil) {
-        self.id = id; self.operation = operation; self.script = script; self.timeout = timeout; self.data = data; self.cols = cols; self.rows = rows; self.result = result; self.error = error
+    public var upload: String?
+    public var name: String?
+    public var size: Int?
+    public var offset: Int?
+    public var file: TerminalFile?
+    public init(id: String = UUID().uuidString, operation: String, script: String? = nil, timeout: Double? = nil, data: Data? = nil, cols: Int? = nil, rows: Int? = nil, result: CommandResult? = nil, error: String? = nil, upload: String? = nil, name: String? = nil, size: Int? = nil, offset: Int? = nil, file: TerminalFile? = nil) {
+        self.id = id; self.operation = operation; self.script = script; self.timeout = timeout; self.data = data; self.cols = cols; self.rows = rows; self.result = result; self.error = error; self.upload = upload; self.name = name; self.size = size; self.offset = offset; self.file = file
     }
     public func validate() throws {
-        guard version == 1, UUID(uuidString: id) != nil, (script?.utf8.count ?? 0) <= 131072,
+        guard version == 1, UUID(uuidString: id) != nil,
+              upload == nil || UUID(uuidString: upload!) != nil, name == nil || name!.utf8.count <= 255,
+              size == nil || (0...TerminalFiles.maximumSize).contains(size!), offset == nil || (0...TerminalFiles.maximumSize).contains(offset!), (script?.utf8.count ?? 0) <= 131072,
               (data?.count ?? 0) <= 65536, timeout == nil || (timeout!.isFinite && timeout! > 0 && timeout! <= 120),
               cols == nil || (2...500).contains(cols!), rows == nil || (2...300).contains(rows!) else { throw AEError("Invalid daemon message") }
     }
@@ -81,6 +88,27 @@ public actor DaemonPool {
             await limiter.release()
             return CommandResult(status: result.status, output: result.output, error: result.error, truncated: result.truncated, transport: .daemon)
         } catch { await limiter.release(); throw error }
+    }
+    public func upload(_ host: Host, name: String, size: Int, source: URL) async throws -> TerminalFile {
+        let connection = try connection(host), upload = UUID().uuidString
+        do {
+            let response = try await connection.request(DaemonMessage(id: upload, operation: "file-begin", name: name, size: size))
+            guard response.upload == upload else { throw AEError("Invalid file transfer response") }
+            let input = try FileHandle(forReadingFrom: source); defer { try? input.close() }
+            var offset = 0
+            while let chunk = try input.read(upToCount: 65536), !chunk.isEmpty {
+                try Task.checkCancellation()
+                _ = try await connection.request(DaemonMessage(operation: "file-write", data: chunk, upload: upload, offset: offset))
+                offset += chunk.count
+            }
+            let completed = try await connection.request(DaemonMessage(operation: "file-finish", upload: upload))
+            guard let file = completed.file else { throw AEError("Invalid completed file response") }
+            return file
+        } catch {
+            let cleanup = Task { _ = try? await connection.request(DaemonMessage(operation: "file-abort", upload: upload)) }
+            await cleanup.value
+            throw error
+        }
     }
     public func terminal(_ host: Host, script: String) async throws -> any TerminalProcess {
         let connection = try connection(host); let terminal = DaemonTerminal(connection: connection)

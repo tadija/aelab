@@ -1,0 +1,60 @@
+import { chromium } from '../Frontend/node_modules/playwright/index.mjs';
+import { expect } from '../Frontend/node_modules/@playwright/test/index.mjs';
+const browser = await chromium.launch({ headless: true, ...(process.env.AELAB_TEST_BROWSER ? { executablePath: process.env.AELAB_TEST_BROWSER } : {}) });
+try {
+  const page = await browser.newPage(), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const config = { version: 1, paths: [], ttyButtons: [], tools: [], plugins: [{ name: 'Probe', executable: '/tmp/probe', arguments: [] }], hosts: [{ name: 'Local', transport: 'local', projects: [{ name: 'Work', dir: '/tmp/work' }], tools: [], plugins: ['probe'], services: [] }] };
+  let releaseLoad;
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url()), path = url.pathname;
+    let data = {};
+    if (path.endsWith('/auth/session')) data = { csrf: 'fixture' };
+    else if (path.endsWith('/config')) {
+      if (url.searchParams.get('format') === 'source') {
+        if (releaseLoad === true) await new Promise(resolve => releaseLoad = resolve);
+        data = { content: JSON.stringify(config), revision: 'fixture' };
+      } else data = { config, revision: 'fixture' };
+    } else if (path.endsWith('/status')) data = { reachable: true, checked: new Date().toISOString(), staleAfterSeconds: 30, hostname: 'fixture', connection: { status: 0 }, tmux: { status: 0, output: '' }, discovered: [], curated: {} };
+    else if (path.endsWith('/terminals')) data = [];
+    else if (path.endsWith('/tools')) data = { tools: [] };
+    else if (path.endsWith('/plugins')) data = [{ plugin: 'probe', state: 'installed', source: { id: 'probe', name: 'Probe', filename: '/tmp/probe', language: 'bash' } }];
+    else if (path.endsWith('/source')) data = { content: '#!/bin/sh\necho OK\n', revision: 'fixture' };
+    else if (path.endsWith('/directories')) data = { path: '/tmp', parent: '/', directories: [], truncated: false };
+    await route.fulfill({ json: data });
+  });
+  await page.goto((process.env.AELAB_TEST_ORIGIN ?? 'http://127.0.0.1:5173') + '/hosts/local/');
+  await page.getByRole('button', { name: 'Add project', exact: true }).click();
+  let form = page.getByRole('dialog', { name: 'Configure project', exact: true });
+  await form.getByLabel('Name', { exact: true }).fill('Draft');
+  await form.getByRole('button', { name: 'Browse Absolute project directory', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Select host directory', exact: true });
+  await expect(picker).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0); await expect(form).toBeVisible();
+  await form.getByLabel('Name', { exact: true }).press('Escape'); await expect(form).toHaveCount(0);
+  await page.getByRole('region', { name: 'PROJECTS', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  form = page.getByRole('dialog', { name: 'Configure project', exact: true });
+  await form.getByLabel('Name', { exact: true }).press('Escape'); await expect(form).toHaveCount(0);
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Main configuration', exact: true });
+  await expect(editor.getByLabel('Main configuration JSON')).toBeEnabled();
+  await editor.getByLabel('Main configuration JSON').press('Escape'); await expect(editor).toHaveCount(0);
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  await editor.getByLabel('Main configuration JSON').fill('{}');
+  page.once('dialog', dialog => dialog.dismiss());
+  await editor.getByLabel('Main configuration JSON').press('Escape'); await expect(editor).toBeVisible();
+  page.once('dialog', dialog => dialog.accept());
+  await editor.getByLabel('Main configuration JSON').press('Escape'); await expect(editor).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit script Probe', exact: true }).click();
+  const plugin = page.getByRole('dialog', { name: 'Plugin scripts', exact: true });
+  await expect(plugin.getByLabel('Plugin source')).toBeEnabled();
+  await plugin.getByLabel('Plugin source').press('Escape'); await expect(plugin).toHaveCount(0);
+  releaseLoad = true;
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  await expect.poll(() => typeof releaseLoad).toBe('function');
+  await page.keyboard.press('Escape'); await expect(editor).toBeVisible();
+  releaseLoad(); await expect(editor.getByLabel('Main configuration JSON')).toBeEnabled();
+  await page.keyboard.press('Escape'); await expect(editor).toHaveCount(0);
+  expect(errors).toEqual([]);
+  console.log('Escape closes create/edit forms and editors, respects dirty/busy editors, and dismisses nested pickers first');
+} finally { await browser.close(); }

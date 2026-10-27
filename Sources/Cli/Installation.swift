@@ -19,9 +19,9 @@ struct Installation {
 
     /// Copies a complete release before switching the stable executable links.
     /// Never touches the runtime home or overwrites unrelated executable files.
-    func install(source: URL) throws {
+    @discardableResult func install(source: URL) throws -> Bool {
         let fm = FileManager.default
-        let binaries = ["aelab", "aelab-server"]
+        let binaries = ["aelab-cli", "aelab-server", "aelab-daemon"]
         let build = source.appendingPathComponent(".build/release")
         let assets = source.appendingPathComponent("Frontend/dist")
         guard binaries.allSatisfy({ fm.isExecutableFile(atPath: build.appendingPathComponent($0).path) }),
@@ -29,10 +29,12 @@ struct Installation {
             throw AEError("Build the release binaries and frontend first, or use ./.ae install")
         }
         let current = application.appendingPathComponent("current")
-        for name in binaries {
-            let destination = bin.appendingPathComponent(name)
+        let links = binaries.map { (name: $0, target: current.appendingPathComponent("bin/" + $0).path) } + [(name: "aelab", target: "aelab-cli")]
+        for link in links {
+            let destination = bin.appendingPathComponent(link.name)
             if let target = try? fm.destinationOfSymbolicLink(atPath: destination.path) {
-                guard target == current.appendingPathComponent("bin/" + name).path else { throw AEError("Refusing to replace unrelated executable: \(destination.path)") }
+                let managed = URL(fileURLWithPath: target, relativeTo: bin.appendingPathComponent("", isDirectory: true)).standardizedFileURL.path.hasPrefix(current.appendingPathComponent("bin").path + "/")
+                guard target == link.target || managed else { throw AEError("Refusing to replace unrelated executable: \(destination.path)") }
             } else if fm.fileExists(atPath: destination.path) {
                 throw AEError("Refusing to replace unrelated executable: \(destination.path)")
             }
@@ -44,6 +46,25 @@ struct Installation {
         }
         do { try fm.createDirectory(at: bin, withIntermediateDirectories: true) }
         catch { throw AEError("Cannot create install directory \(bin.path); use a writable --prefix or install with explicitly granted permissions") }
+        func publishLinks() throws {
+            for link in links {
+                let destination = bin.appendingPathComponent(link.name)
+                if (try? fm.destinationOfSymbolicLink(atPath: destination.path)) != link.target {
+                    let temporary = bin.appendingPathComponent(".aelab-link-" + UUID().uuidString)
+                    defer { try? fm.removeItem(at: temporary) }
+                    try fm.createSymbolicLink(atPath: temporary.path, withDestinationPath: link.target)
+                    guard rename(temporary.path, destination.path) == 0 else { throw AEError("Cannot publish executable link: " + destination.path) }
+                }
+            }
+        }
+        let template = source.appendingPathComponent("Docs/Config/aelab.example.json")
+        let installedTemplate = current.appendingPathComponent("config/aelab.example.json")
+        let matchingTemplate = fm.fileExists(atPath: template.path) == fm.fileExists(atPath: installedTemplate.path) && (!fm.fileExists(atPath: template.path) || fm.contentsEqual(atPath: template.path, andPath: installedTemplate.path))
+        if binaries.allSatisfy({ fm.isExecutableFile(atPath: current.appendingPathComponent("bin/" + $0).path) && fm.contentsEqual(atPath: build.appendingPathComponent($0).path, andPath: current.appendingPathComponent("bin/" + $0).path) }),
+           matchingTemplate, fm.contentsEqual(atPath: assets.path, andPath: current.appendingPathComponent("public").path) {
+            try publishLinks()
+            return false
+        }
         let releases = application.appendingPathComponent("releases")
         try fm.createDirectory(at: releases, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o755])
         let name = UUID().uuidString
@@ -56,7 +77,6 @@ struct Installation {
             try fm.copyItem(at: build.appendingPathComponent(binary), to: destination)
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destination.path)
         }
-        let template = source.appendingPathComponent("Docs/Config/aelab.example.json")
         if fm.fileExists(atPath: template.path) {
             try fm.createDirectory(at: release.appendingPathComponent("config"), withIntermediateDirectories: true)
             try fm.copyItem(at: template, to: release.appendingPathComponent("config/aelab.example.json"))
@@ -67,11 +87,7 @@ struct Installation {
         defer { try? fm.removeItem(at: temporaryLink) }
         guard rename(temporaryLink.path, current.path) == 0 else { throw AEError("Cannot activate installed release") }
         activated = true
-        for binary in binaries {
-            let destination = bin.appendingPathComponent(binary)
-            if (try? fm.destinationOfSymbolicLink(atPath: destination.path)) == nil {
-                try fm.createSymbolicLink(atPath: destination.path, withDestinationPath: current.appendingPathComponent("bin/" + binary).path)
-            }
-        }
+        try publishLinks()
+        return true
     }
 }

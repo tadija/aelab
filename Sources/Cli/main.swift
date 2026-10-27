@@ -12,8 +12,11 @@ import Darwin
     }
     static func run() async throws {
         var args = Array(CommandLine.arguments.dropFirst())
+        if args == ["--version"] { print(AelabVersion.display); return }
+        if args == ["--build"] { print(AelabVersion.build); return }
+        var explicitHome: String?
         var homePath = ProcessInfo.processInfo.environment["AELAB_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aelab").path
-        if args.first == "--home" { guard args.count > 2 else { throw AEError("--home requires path and command") }; homePath = args[1]; args.removeFirst(2) }
+        if args.first == "--home" { guard args.count > 2 else { throw AEError("--home requires path and command") }; homePath = args[1]; explicitHome = homePath; args.removeFirst(2) }
         guard let action = args.first else { usage(); return }; args.removeFirst()
         if ["help", "--help", "-h"].contains(action) { usage(); return }
         if action == "install" {
@@ -29,51 +32,32 @@ import Darwin
             }
             guard let source else { throw AEError("Use ./.ae install, or install --source REPOSITORY [--prefix PATH]") }
             let location = Installation.location(prefix: prefix)
-            try location.install(source: source)
-            print("Installed CLI: \(location.bin.appendingPathComponent("aelab").path)")
+            if try !location.install(source: source) { print("Installation unchanged; reusing the current release.") }
+            print("Installed CLI: \(location.bin.appendingPathComponent("aelab-cli").path)")
+            print("CLI command: \(location.bin.appendingPathComponent("aelab").path)")
             print("Installed daemon: \(location.bin.appendingPathComponent("aelab-daemon").path)")
             print("Installed server: \(location.bin.appendingPathComponent("aelab-server").path)")
             print("Dashboard assets: \(location.application.appendingPathComponent("current/public").path)")
-            print("Add \(location.bin.path) to PATH if needed; then use aelab help or aelab run. The checkout is only needed for source updates.")
+            print("Add \(location.bin.path) to PATH if needed; then use aelab help, aelab server or aelab daemon. The checkout is only needed for source updates.")
             return
         }
-        var runPort = ProcessInfo.processInfo.environment["AELAB_PORT"] ?? "2108"
-        if action == "run" {
-            while !args.isEmpty {
-                guard args.count >= 2 else { throw AEError("Use run [--home PATH] [--port PORT]") }
-                let flag = args.removeFirst(); let value = args.removeFirst()
-                if flag == "--home" { homePath = value }
-                else if flag == "--port" { runPort = value }
-                else { throw AEError("Unknown run option: \(flag)") }
-            }
-            guard !homePath.isEmpty, let port = Int(runPort), (1...65535).contains(port) else { throw AEError("Invalid run home or port") }
-            runPort = String(port)
+        if action == "server" || (action == "daemon" && args.first != "pair" && args.first != "pairing") {
+            if args == ["--help"] || args == ["-h"] { usage(); return }
+            try await LaunchCommand.start(LaunchOptions(kind: action == "server" ? .server : .daemon, arguments: args, home: explicitHome))
+            return
+        }
+        if action == "daemon", args.first == "pairing" {
+            args.removeFirst()
+            var daemonHome = explicitHome.map { URL(fileURLWithPath: $0) } ?? DaemonSetup.defaultHome
+            if args.first == "--home", args.count >= 2 { daemonHome = URL(fileURLWithPath: args[1]); args.removeFirst(2) }
+            guard args.count == 2, args[0] == "--output" else { throw AEError("Use daemon pairing [--home PATH] --output FILE") }
+            let pairing = try DaemonSetup.pairing(home: daemonHome)
+            try DaemonSetup.privateWrite(JSONEncoder().encode(pairing), to: URL(fileURLWithPath: args[1])); return
         }
         let home = URL(fileURLWithPath: homePath); let store = try ConfigStore(home: home); let ops = Operations(store: store, initiator: "local-cli")
         func require(_ count: Int) throws { guard args.count >= count else { throw AEError("Missing arguments; see aelab help") } }
         func printJSON<T: Encodable>(_ value: T) throws { print(String(decoding: try jsonEncoder.encode(value), as: UTF8.self)) }
         switch action {
-        case "run":
-            let server = RuntimePaths.executable.deletingLastPathComponent().appendingPathComponent("aelab-server")
-            let assets = ProcessInfo.processInfo.environment["AELAB_PUBLIC"] ?? RuntimePaths.publicDirectory
-            guard FileManager.default.isExecutableFile(atPath: server.path), FileManager.default.fileExists(atPath: URL(fileURLWithPath: assets).appendingPathComponent("index.html").path) else { throw AEError("Server or dashboard assets missing; use ./.ae run or ./.ae install") }
-            try await store.initializeIfNeeded(template: RuntimePaths.initialConfiguration())
-            if !FileManager.default.fileExists(atPath: home.appendingPathComponent("state/admin.json").path) {
-                try await Authentication(home: home).bootstrap(password())
-            }
-            let base = try WebBasePath(ProcessInfo.processInfo.environment["AELAB_BASE_PATH"] ?? "")
-            let origin = ProcessInfo.processInfo.environment["AELAB_ORIGIN"] ?? "http://localhost:\(runPort)"
-            setenv("AELAB_HOME", home.path, 1); setenv("AELAB_PORT", runPort, 1)
-            setenv("AELAB_ORIGIN", origin, 1); setenv("AELAB_PUBLIC", assets, 1)
-            print("Starting aelab at \(origin)\(base.value.isEmpty ? "" : base.root) (Ctrl+C to stop)"); fflush(nil)
-            var mask = sigset_t(); sigemptyset(&mask); _ = pthread_sigmask(SIG_SETMASK, &mask, nil)
-            // getpass/runtime signal dispositions must not make the foreground server ignore Ctrl+C.
-            _ = signal(SIGINT, SIG_DFL); _ = signal(SIGTERM, SIG_DFL)
-            _ = signal(SIGHUP, SIG_DFL); _ = signal(SIGQUIT, SIG_DFL)
-            let pointer = strdup(server.path); defer { free(pointer) }
-            var argv = [pointer, nil]
-            _ = argv.withUnsafeMutableBufferPointer { execv(server.path, $0.baseAddress!) }
-            throw AEError("Cannot execute aelab-server")
         case "init":
             if args == ["--if-needed"] { try await store.initializeIfNeeded(template: RuntimePaths.initialConfiguration()) }
             else { guard args.isEmpty else { throw AEError("Use init [--if-needed]") }; try await store.initialize(template: RuntimePaths.initialConfiguration()) }
@@ -127,6 +111,7 @@ import Darwin
                 switch args[i] {
                 case "--persistent": launch.persistent = true
                 case "--yolo": launch.yolo = true
+                case "--alt": launch.alt = true
                 case "--project", "--tool", "--session":
                     guard i + 1 < args.count else { throw AEError("Missing terminal option value") }
                     let flag = args[i]; i += 1
@@ -164,9 +149,12 @@ import Darwin
     }
     static func usage() {
         print("""
-        aelab [--home PATH] COMMAND
-          run [--home PATH] [--port PORT]   start installed/built server without rebuilding
-          install --source REPOSITORY [--prefix PATH]
+        aelab --version | --build | [--home PATH] COMMAND
+          server [--home PATH] [--port PORT] [--service]
+          daemon [--home PATH] [--endpoint https://HOST:1984] [--bind ADDRESS] [--service]
+                                       run in the foreground, or install/start a user service
+          daemon pairing [--home PATH] --output FILE
+          install --source REPOSITORY [--prefix PATH]   copy all executables/assets; start nothing
           init [--if-needed]            initialize with localhost (never replaces existing entries)
           admin bootstrap|reset        local administrator credentials/recovery
           config show|validate|apply FILE
@@ -176,12 +164,12 @@ import Darwin
           start|stop|restart HOST SERVICE   explicit remote mutation
           plugins HOST | probe HOST PLUGIN
           Names determine URL IDs (for example, Dev Server → dev-server).
-          tty HOST [--project ID] [--tool ID] [--session NAME] [--persistent] [--yolo]
+          tty HOST [--project ID] [--tool ID] [--session NAME] [--persistent] [--yolo] [--alt]
           daemon pair HOST --file PAIRING.json
           doctor                       configuration and read-only host diagnostics
-        Repository build/start/update: ./.ae run [--debug | --configuration debug|release] [--home PATH] [--port PORT]
-        Install release binaries and assets: ./.ae install [--prefix PATH]
-        Install only this host’s daemon: ./.ae daemon-install --endpoint https://HOST:1984 [--service]
+        Repository build/start/update: ./.ae server [--configuration debug|release] [--home PATH] [--port PORT] [--service] [--clean]
+        Install release binaries and assets: ./.ae install [--prefix PATH] [--clean]
+        Build/start only the host daemon: ./.ae daemon [--endpoint https://HOST:1984] [--service] [--clean]
         Uses shared core and explicit local/SSH/daemon execution; no running dashboard required.
         """)
     }

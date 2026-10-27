@@ -69,6 +69,11 @@ def main():
                 assert request('/assets/' + asset.name)[1] == original_asset
             finally:
                 index.write_bytes(original); asset.write_bytes(original_asset)
+            # Dotted entity names are dashboard routes, not asset filenames.
+            for path in ['/hosts/local/projects/.aelab', '/hosts/local/projects/.aelab/', '/hosts/local/projects/a..b', '/hosts/lab.example/tools/tool.sh', '/hosts/local']:
+                status, body, headers = request(path, use_cookie=False)
+                assert status == 200 and body == original and headers['Content-Type'].startswith('text/html'), (path, status)
+            assert request('/assets/missing.js', use_cookie=False)[0] == 404
             assert request('/api/config', use_cookie=False)[0] == 401
             assert request('/api/hosts/test/directories', use_cookie=False)[0] == 401
             assert request('/api/hosts/test/plugins/probe/source/deployment?from=local', use_cookie=False)[0] == 401
@@ -85,7 +90,7 @@ def main():
                 try:
                     with urllib.request.urlopen(req, timeout=5) as response: return response.status != 101
                 except urllib.error.HTTPError as e: return e.code != 101
-            assert request('/api/openapi.json', use_cookie=False)[0] == 401
+            assert request('/api/docs/openapi.json', use_cookie=False)[0] == 401
             assert request('/api/docs', use_cookie=False)[0] == 401
             assert request('/api/state/sections', use_cookie=False)[0] == 401
             assert request('/api/hosts/test/plugins/example/runs', 'POST', {}, use_cookie=False)[0] == 401
@@ -135,7 +140,7 @@ def main():
             assert request('/api/state/sections', 'PUT', {'host': '../escape', 'sections': {}}, csrf)[0] != 200
             assert request('/api/hosts/test/tmux/sessions/safe', 'DELETE', {}, request_origin='https://evil.example')[0] != 200
             assert request('/api/hosts/unknown/tmux/sessions/safe', 'DELETE', {}, csrf)[0] != 200
-            status, api, _ = request('/api/openapi.json'); api = json.loads(api)
+            status, api, _ = request('/api/docs/openapi.json'); api = json.loads(api)
             assert status == 200 and api['openapi'] == '3.1.0'
             assert list(api['paths']) == sorted(api['paths'])
             assert all(list(methods) == sorted(methods) for methods in api['paths'].values())
@@ -183,7 +188,7 @@ def main():
                 # Only fixture-owned paths: reject a symlink target without reading/copying its contents.
                 assert 'aelab-ssh-' in str(target) and target.parent.name == 'portable' and target.parent.parent.name == 'plugins'
                 target.parent.mkdir(parents=True, mode=0o700)
-                target.symlink_to(config['hosts'][0]['projects'][0]['directory'] + '/disk-space.sh')
+                target.symlink_to(config['hosts'][0]['projects'][0]['dir'] + '/disk-space.sh')
                 try: assert request(deploy_url + '?from=fixture-3')[0] == 400
                 finally:
                     target.unlink()

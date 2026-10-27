@@ -44,12 +44,14 @@ private final class ProcessControl: @unchecked Sendable {
 }
 /// Bounded process output, timeout, cancellation, and no shell on the central host.
 public enum ProcessRunner {
-    public static func run(executable: String, arguments: [String], timeout: TimeInterval = 15) async throws -> CommandResult {
+    public static func run(executable: String, arguments: [String], timeout: TimeInterval = 15, inputFile: URL? = nil) async throws -> CommandResult {
         try Task.checkCancellation()
         let process = Process(); let out = Pipe(); let err = Pipe(); let stdout = Capture(); let stderr = Capture()
         process.executableURL = URL(fileURLWithPath: executable); process.arguments = arguments
         let control = ProcessControl(process)
-        process.standardInput = FileHandle.nullDevice; process.standardOutput = out; process.standardError = err
+        let input = try inputFile.map { try FileHandle(forReadingFrom: $0) }
+        defer { try? input?.close() }
+        process.standardInput = input ?? FileHandle.nullDevice; process.standardOutput = out; process.standardError = err
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global().async {
@@ -103,9 +105,9 @@ public struct SSH: Sendable {
         if let port = host.port { args += ["-p", String(port)] }; if tty { args.append("-tt") }
         args += ["--", host.destination]; return args
     }
-    public func execute(_ host: Host, script: String, timeout: TimeInterval = 15) async throws -> CommandResult {
+    public func execute(_ host: Host, script: String, timeout: TimeInterval = 15, inputFile: URL? = nil) async throws -> CommandResult {
         try await limiter.acquire()
-        do { let result = try await ProcessRunner.run(executable: "/usr/bin/ssh", arguments: arguments(host) + [host.executionScript(script)], timeout: timeout); await limiter.release(); return result }
+        do { let result = try await ProcessRunner.run(executable: "/usr/bin/ssh", arguments: arguments(host) + [host.executionScript(script)], timeout: timeout, inputFile: inputFile); await limiter.release(); return result }
         catch { await limiter.release(); throw error }
     }
     public func run(_ host: Host, args: [String], timeout: TimeInterval = 15) async throws -> CommandResult { try await execute(host, script: command(args), timeout: timeout) }

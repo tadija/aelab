@@ -59,7 +59,7 @@ LogLevel VERBOSE
                 subprocess.run(['git', 'init', '--template=', str(directory)], check=True, capture_output=True)
                 subprocess.run(['git', '-C', str(directory), 'symbolic-ref', 'HEAD', f'refs/heads/fixture/host-{number}'], check=True)
             (local/'.tmux.conf').write_text('set -g prefix C-b\nset -g mouse on\n')
-            config = dict(version=1, tools=[dict(name=f'Tool {n}', executable='/usr/bin/printf', arguments=[f'HOST-{n}']) for n in [1,2,3]], plugins=[], paths=['/opt/homebrew/bin','/usr/local/bin'], hosts=[dict(name=f'Fixture {n}', background='#223344', **(dict(transport='local') if n == 3 else dict(destination=f'endpoint-{n}')), projects=[dict(name=f'Project {n}', directory=str(local if n == 3 else root/str(n)))], services=[], tools=[f'tool-{n}'], plugins=[]) for n in [1,2,3]])
+            config = dict(version=1, tools=[dict(name=f'Tool {n}', executable='/usr/bin/printf', arguments=[f'HOST-{n}']) for n in [1,2,3]], plugins=[], paths=['/opt/homebrew/bin','/usr/local/bin'], hosts=[dict(name=f'Fixture {n}', background='#223344', **(dict(transport='local') if n == 3 else dict(destination=f'endpoint-{n}')), projects=[dict(name=f'Project {n}', dir=str(local if n == 3 else root/str(n)))], services=[], tools=[f'tool-{n}'], plugins=[]) for n in [1,2,3]])
             config['tools'][0]['yoloArguments'] = []
             config['tools'].append(dict(name='Project tool', executable='/bin/sh', arguments=['-c', 'printf "PROJECT_TOOL_OK\\n"; pwd; exec /bin/sh']))
             config['hosts'][0]['tools'].append('project-tool')
@@ -90,17 +90,15 @@ LogLevel VERBOSE
             if not local_tmux: raise RuntimeError('tmux is required for terminal integration tests')
             # Prestart only the isolated local socket with our fixture config, not user bindings/hooks.
             subprocess.run([local_tmux, '-f', str(local/'.tmux.conf'), 'new-session', '-d', '-s', 'fixture-bootstrap', '/bin/sh'], env=env, check=True, timeout=10)
-            cli = ROOT/'.build/debug/aelab'
+            cli = ROOT/'.build/debug/aelab-cli'
             if os.environ.get('AELAB_TEST_DAEMON') == '1':
-                # Install directly in an owned host home, without any OS service.
+                # Initialize and start through the CLI in an owned home, without any OS service.
                 daemon_port = free_port(); endpoint = f'https://localhost:{daemon_port}'
                 daemon_home = root/'2/.aelab/daemon'
                 daemon_env = dict(env, HOME=str(root/'2'), TMUX_TMPDIR=str(root/'2'))
-                installed = subprocess.run([str(ROOT/'.build/debug/aelab-daemon'), 'install', '--home', str(daemon_home), '--prefix', str(root/'2/installed'), '--endpoint', endpoint, '--bind', '127.0.0.1'], env=daemon_env, text=True, capture_output=True, timeout=45)
-                assert installed.returncode == 0, installed.stderr
                 daemon_log = open(root/'daemon.log', 'w'); logs.append(daemon_log)
-                children.append(subprocess.Popen([str(daemon_home/'aelab-daemon'), '--home', str(daemon_home), 'run'], env=daemon_env, stdout=daemon_log, stderr=daemon_log))
-                for _ in range(100):
+                children.append(subprocess.Popen([str(cli), 'daemon', '--home', str(daemon_home), '--endpoint', endpoint, '--bind', '127.0.0.1'], env=daemon_env, stdout=daemon_log, stderr=daemon_log))
+                for _ in range(300):
                     try:
                         probe = socket.create_connection(('127.0.0.1', daemon_port), timeout=.2); probe.close(); break
                     except OSError: time.sleep(.05)

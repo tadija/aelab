@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { route, terminalURL, shouldCopy, prefixBytes, discoveryMatchesStatus, validTint, nameID, identifyConfig, configurationPayload, renameReferences, pluginHasSource, tmuxSessionMessage, serviceDiscoveryMessage, launchdState } from './model';
+import { route, terminalName, terminalTabTitle, terminalURL, shouldCopy, prefixBytes, discoveryMatchesStatus, validTint, nameID, sourceName, hostSourceName, identifyConfig, configurationPayload, renameReferences, pluginHasSource, tmuxSessionMessage, serviceDiscoveryMessage, launchdState } from './model';
 describe('terminal UX boundaries', () => {
  it('requires host-aware tmux deep links', () => { expect(route('/hosts/a/projects/main/')).toMatchObject({host:'a',project:'main',terminal:true}); expect(route('/hosts/a/tty/tmux/saved/')).toMatchObject({host:'a',terminal:true,session:'saved'}); expect(route('/tty/tmux/saved/')).toMatchObject({host:undefined,terminal:false}); });
  it('preserves project/tool combinations in launch URLs', () => { const url = terminalURL({host:'b',project:'p',tool:'t',persistent:true}); expect(url).toContain('/hosts/b/tty/'); expect(url).toContain('project=p'); expect(url).toContain('tool=t'); });
@@ -22,6 +22,9 @@ it('accepts only valid persisted host tint colors', () => {
 });
 
 it('derives URL identity only from the name', () => {
+ expect(nameID('.aelab')).toBe('.aelab');
+ expect(nameID('aelab')).toBe('aelab');
+ expect(nameID('com.example.agent')).toBe('com.example.agent');
  expect(nameID('Dév Server')).toBe('dev-server');
  expect(nameID('DEV---Server')).toBe('dev-server');
  expect(nameID('✨')).toBe('');
@@ -102,4 +105,45 @@ it('renders launchd states conservatively without treating unloaded jobs as heal
  expect(launchdState({ ...result, status:113, error:'Could not find service com.example' })).toBe('unloaded');
  expect(launchdState({ ...result, status:1, error:'Operation not permitted' })).toBe('permission-denied');
  expect(launchdState({ ...result, status:124 }, 'running')).toBe('timeout');
+});
+
+ it('labels terminals with their project or launch directory without a redundant host suffix', () => {
+   const host = { name: 'Dev', projects: [{id:'dotfiles',name:'.dotfiles',dir:'/home/me/.dotfiles'}] } as Host;
+   const tools = [{id:'codex',name:'Codex',executable:'codex',arguments:[],directory:'/opt/work/default'}];
+   expect(terminalName({project:'dotfiles',tool:'codex'},host,tools)).toBe('Codex@.dotfiles');
+   expect(terminalName({project:'dotfiles',tool:'codex'},{...host,name:'local'},tools)).toBe('Codex@.dotfiles');
+   expect(terminalTabTitle({project:'dotfiles',tool:'codex'},{...host,name:'local'},tools)).toBe('Codex@.dotfiles.local');
+   expect(terminalName({project:'dotfiles'},host,tools)).toBe('shell@.dotfiles');
+   expect(terminalName({tool:'codex',directory:'/src/other/'},host,tools)).toBe('Codex@other');
+   expect(terminalName({tool:'codex'},host,tools)).toBe('Codex@default');
+   expect(terminalName({tool:'codex'},host,tools,'/src/chosen')).toBe('Codex@chosen');
+   expect(terminalName({},host,tools,'/home/me')).toBe('shell@me');
+   expect(terminalName({session:'saved'},host,tools,'/srv/work')).toBe('saved@work');
+   expect(terminalName({},host,tools,'/')).toBe('shell@/');
+   expect(terminalName({},host,tools)).toBe('shell@Dev');
+ });
+
+import { pinnedLaunch } from './model';
+it('opens tmux pins through existing sessions and native pins through retained PTYs', () => {
+ expect(pinnedLaunch({host:'local',id:'shortcut',number:2,cwd:'',session:'work'})).toEqual({host:'local',session:'work'});
+ expect(pinnedLaunch({host:'remote',id:'pty',number:1,cwd:'/tmp',project:'p'})).toEqual({host:'remote',pinned:'pty',project:'p',tool:undefined});
+});
+
+it('derives default names from paths and host connections', () => {
+ expect(sourceName('/Users/dev/GitHub/.aelab/')).toBe('.aelab');
+ expect(sourceName('/usr/local/bin/codex')).toBe('codex');
+ expect(sourceName('~/scripts/probe.swift')).toBe('probe.swift');
+ expect(sourceName('gui/502/com.example.agent')).toBe('com.example.agent');
+ expect(sourceName('example.service')).toBe('example.service');
+ expect(sourceName('')).toBe('');
+ expect(hostSourceName('ssh', 'dev@lab.example', '')).toBe('lab.example');
+ expect(hostSourceName('daemon', '', 'remote-lab')).toBe('remote-lab');
+ expect(hostSourceName('local', '', '')).toBe('localhost');
+});
+
+it('preserves independent ALT and YOLO launch flags in terminal links', () => {
+ const url = new URL(terminalURL({host:'local',tool:'codex',project:'work',alt:true,yolo:true}), 'http://test');
+ expect(url.searchParams.get('alt')).toBe('1');
+ expect(url.searchParams.get('yolo')).toBe('1');
+ expect(new URL(terminalURL({host:'local',tool:'codex'}), 'http://test').searchParams.has('alt')).toBe(false);
 });

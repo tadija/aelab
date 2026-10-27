@@ -9,9 +9,10 @@ struct TerminalRequest: Decodable, Sendable {
     let pinned: String?
     let directory: String?
     let persistent: Bool?
+    let alt: Bool?
     let yolo: Bool?
     let window: String?
-    enum CodingKeys: String, CodingKey, CaseIterable { case project, tool, session, pinned, directory, persistent, yolo, window }
+    enum CodingKeys: String, CodingKey, CaseIterable { case project, tool, session, pinned, directory, persistent, yolo, alt, window }
     private struct Key: CodingKey {
         let stringValue: String
         let intValue: Int? = nil
@@ -28,11 +29,12 @@ struct TerminalRequest: Decodable, Sendable {
         pinned = try c.decodeIfPresent(String.self, forKey: .pinned)
         directory = try c.decodeIfPresent(String.self, forKey: .directory)
         persistent = try c.decodeIfPresent(Bool.self, forKey: .persistent)
+        alt = try c.decodeIfPresent(Bool.self, forKey: .alt)
         yolo = try c.decodeIfPresent(Bool.self, forKey: .yolo)
         window = try c.decodeIfPresent(String.self, forKey: .window)
     }
     func launch(host: String) -> TerminalLaunch {
-        var launch = TerminalLaunch(host: host, project: project, tool: tool, session: session, persistent: persistent, yolo: yolo)
+        var launch = TerminalLaunch(host: host, project: project, tool: tool, session: session, persistent: persistent, yolo: yolo, alt: alt)
         launch.pinned = pinned; launch.directory = directory; launch.window = window
         return launch
     }

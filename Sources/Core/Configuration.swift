@@ -68,6 +68,7 @@ public struct Project: Codable, Sendable, Identifiable {
     public var name: String
     public var directory: String
     public var session: String?
+    enum CodingKeys: String, CodingKey { case name, directory = "dir", session }
 }
 public enum Provider: String, Codable, Sendable { case systemd, launchd, docker, compose }
 public struct Service: Codable, Sendable, Identifiable {
@@ -89,8 +90,8 @@ public struct Tool: Codable, Sendable, Identifiable {
     public var name: String
     public var executable: String
     public var arguments: [String]
+    public var altArguments: [String]? = nil
     public var yoloArguments: [String]?
-    public var session: String?
 }
 private struct ConfigurationKey: CodingKey {
     let stringValue: String
@@ -169,9 +170,8 @@ public struct Configuration: Codable, Sendable {
         for plugin in plugins { try plugin.validate() }
         for t in tools {
             if let directory = t.directory { try absolutePath(directory) }
-            guard !t.name.isEmpty, !t.executable.isEmpty, !t.executable.hasPrefix("-"), !t.executable.contains("\0"), !t.executable.contains("\n"), t.executable.utf8.count <= 4096, t.arguments.count <= 64, (t.yoloArguments?.count ?? 0) <= 64,
-                  (t.arguments + (t.yoloArguments ?? [])).allSatisfy({ !$0.contains("\0") && $0.utf8.count <= 8192 }) else { throw AEError("Invalid tool command") }
-            if let session = t.session { try validateSession(session) }
+            guard !t.name.isEmpty, !t.executable.isEmpty, !t.executable.hasPrefix("-"), !t.executable.contains("\0"), !t.executable.contains("\n"), t.executable.utf8.count <= 4096, t.arguments.count <= 64, (t.yoloArguments?.count ?? 0) <= 64, (t.altArguments?.count ?? 0) <= 64,
+                  (t.arguments + (t.altArguments ?? []) + (t.yoloArguments ?? [])).allSatisfy({ !$0.contains("\0") && $0.utf8.count <= 8192 }) else { throw AEError("Invalid tool command") }
         }
         for h in hosts {
             guard !h.name.isEmpty, [h.background, h.tint].allSatisfy({ $0 == nil || $0!.range(of: "^#[0-9a-fA-F]{6}$", options: .regularExpression) != nil }) else { throw AEError("Invalid host \(h.id)") }
@@ -214,7 +214,8 @@ public struct Configuration: Codable, Sendable {
 
 /// Keep the configured key bar readable without changing the raw file editor's formatting.
 public func configurationData(_ config: Configuration) throws -> Data {
-    var text = String(decoding: try jsonEncoder.encode(config), as: UTF8.self)
+    let encoder = jsonEncoder; encoder.outputFormatting.insert(.withoutEscapingSlashes)
+    var text = String(decoding: try encoder.encode(config), as: UTF8.self)
     if !config.ttyButtons.isEmpty {
         let expression = try NSRegularExpression(pattern: #"("ttyButtons"\s*:\s*\[).*?(\n  \])"#, options: [.dotMatchesLineSeparators])
         if let match = expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), let range = Range(match.range(at: 0), in: text) {
@@ -230,10 +231,10 @@ public func configurationData(_ config: Configuration) throws -> Data {
 public func nameID(_ name: String) -> String {
     let plain = name.decomposedStringWithCompatibilityMapping.unicodeScalars.filter { !CharacterSet.nonBaseCharacters.contains($0) }
     let lower = String(String.UnicodeScalarView(plain)).lowercased()
-    return lower.components(separatedBy: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789").inverted).filter { !$0.isEmpty }.joined(separator: "-")
+    return lower.components(separatedBy: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789.").inverted).filter { !$0.isEmpty }.joined(separator: "-")
 }
 
-public func validID(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", options: .regularExpression) != nil }
+public func validID(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9.][A-Za-z0-9_.-]{0,63}$", options: .regularExpression) != nil && value.range(of: "[A-Za-z0-9]", options: .regularExpression) != nil }
 public func validateSession(_ value: String) throws {
     guard value.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$", options: .regularExpression) != nil else { throw AEError("Invalid tmux session name") }
 }

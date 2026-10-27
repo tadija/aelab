@@ -2,6 +2,7 @@
   export type EditorDocument = { content: string; revision: string };
 </script>
 <script lang="ts">
+  import { escapeDismiss } from './escapeDismiss';
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
@@ -28,7 +29,7 @@
   function dismiss() { if (!dirty || confirm(discard)) close(); }
   onMount(() => { void run(async () => accept(await load())); });
 </script>
-<div class="overlay" role="presentation"><div class="dialog config-editor" role="dialog" tabindex="-1" aria-modal="true" aria-label={label} aria-busy={progress ? busy : undefined}>
+<div class="overlay" role="presentation"><div class="dialog config-editor" use:escapeDismiss={() => { if (!busy) dismiss(); }} role="dialog" tabindex="-1" aria-modal="true" aria-label={label} aria-busy={progress ? busy : undefined}>
   <h2>{title}</h2>{@render filename()}
   {#if progress && busy}<p class="loading-state" role="status"><span class="loader" aria-hidden="true"></span> {revision ? 'Working…' : 'Loading script…'}</p>{/if}
   {#if available}<div class="config-field"><CodeEditor {wrap} bind:value={content} disabled={busy || !revision} {language} label={editorLabel} /></div>{:else}<p class="muted">No existing configured Bash, Ruby or Swift sources are available.</p>{/if}

@@ -4,7 +4,7 @@
 Description=aelab daemon
 
 [Service]
-ExecStart="%h/.aelab/daemon/aelab-daemon" --home "%h/.aelab/daemon" run
+ExecStart="%h/.local/bin/aelab-daemon" --home "%h/.aelab/daemon"
 Restart=on-failure
 RestartSec=3
 UMask=0077

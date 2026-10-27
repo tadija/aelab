@@ -1,64 +1,80 @@
 #!/bin/sh
-# Repository entrypoint for the compiled aelab administrative CLI.
+# Repository entrypoint: build, then delegate to the same installed CLI.
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-if [ "${1:-}" = "--home" ] && [ "${3:-}" = "run" ]; then
-  run_home=$2
+if { [ "${1:-}" = --version ] || [ "${1:-}" = --build ]; } && [ "$#" -eq 1 ]; then
+  exec /bin/sh "$root/Tools/build-metadata.sh" "$1"
+fi
+
+if [ "${1:-}" = "--home" ] && { [ "${3:-}" = server ] || [ "${3:-}" = daemon ]; } && [ "${4:-}" != pair ] && [ "${4:-}" != pairing ]; then
+  launch_home=$2
+  operation=$3
   shift 3
-  set -- run --home "$run_home" "$@"
+  set -- "$operation" --home "$launch_home" "$@"
 fi
 case "${1:-}" in
-  daemon-install)
-    shift
-    # Keep caller-relative paths meaningful when building inside the checkout.
-    (cd "$root" && swift build -c release --product aelab-daemon)
-    exec "$root/.build/release/aelab-daemon" install "$@"
-    ;;
-  run|install)
+  server|daemon|install)
     build_configuration=release
+    clean=false
     operation=$1
     shift
+    if [ "$operation" = daemon ] && { [ "${1:-}" = pair ] || [ "${1:-}" = pairing ]; }; then
+      (cd "$root" && swift build -c release --product aelab-cli)
+      exec "$root/.build/release/aelab-cli" daemon "$@"
+    fi
+    if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+      printf '%s\n' 'Use ./.ae server [--configuration debug|release] [--home PATH] [--port PORT] [--service] [--clean]' '    ./.ae daemon [--configuration debug|release] [--home PATH] [--endpoint https://HOST:1984] [--bind ADDRESS] [--service] [--clean]' '    ./.ae install [--prefix PATH] [--clean]' 'Install copies all executables and the dashboard; it starts nothing.'
+      exit 0
+    fi
     validate_options() {
+      seen=' '
       while [ "$#" -gt 0 ]; do
-        if [ "$operation:$1" = "run:--debug" ]; then build_configuration=debug; shift; continue; fi
-        if [ "$#" -lt 2 ]; then printf '%s\n' 'An option value is missing' >&2; exit 1; fi
+        case "$seen" in *" $1 "*) printf '%s\n' "Duplicate option: $1" >&2; exit 1 ;; esac
+        seen="$seen$1 "
+        if [ "$1" = --clean ]; then clean=true; shift; continue; fi
+        if [ "$1" = --service ] && [ "$operation" != install ]; then shift; continue; fi
+        if [ "$#" -lt 2 ] || [ -z "$2" ]; then printf '%s\n' 'An option value is missing' >&2; exit 1; fi
+        case "$2" in --*) printf '%s\n' 'An option value is missing' >&2; exit 1 ;; esac
         case "$operation:$1" in
-          run:--home|install:--prefix) [ -n "$2" ] || { printf '%s\n' 'Path must not be empty' >&2; exit 1; } ;;
-          run:--configuration)
+          server:--home|daemon:--home|daemon:--endpoint|daemon:--bind|install:--prefix) ;;
+          server:--configuration|daemon:--configuration)
             case "$2" in debug|release) build_configuration=$2 ;; *) printf '%s\n' 'Configuration must be debug or release' >&2; exit 1 ;; esac ;;
-          run:--port)
+          server:--port)
             case "$2" in ''|*[!0-9]*) printf '%s\n' 'Invalid port' >&2; exit 1 ;; esac
             if [ "${#2}" -gt 5 ] || [ "$2" -lt 1 ] || [ "$2" -gt 65535 ]; then printf '%s\n' 'Invalid port' >&2; exit 1; fi ;;
-          *) printf '%s\n' 'Use ./.ae run [--debug | --configuration debug|release] [--home PATH] [--port PORT] or ./.ae install [--prefix PATH]' >&2; exit 1 ;;
+          *) printf '%s\n' "Unknown $operation option: $1; see ./.ae $operation --help" >&2; exit 1 ;;
         esac
         shift 2
       done
     }
     validate_options "$@"
-    # CLI argument paths must retain their meaning when builds change directory.
-    caller_directory=$PWD
-    (cd "$root" && python3 Scripts/generate-api.py && swift build -c "$build_configuration" && npm ci --prefix Frontend && if [ "$build_configuration" = debug ]; then npm run build --prefix Frontend -- --mode development --sourcemap; else npm run build --prefix Frontend; fi)
-    cd "$caller_directory"
-    if [ "$operation" = "install" ]; then
-      exec "$root/.build/release/aelab" install --source "$root" "$@"
+    if [ "$clean" = true ]; then (cd "$root" && swift package clean); fi
+    if [ "$operation" = daemon ]; then
+      # No dashboard or Node needed on a daemon-only host.
+      (cd "$root" && swift build -c "$build_configuration" --product aelab-cli && swift build -c "$build_configuration" --product aelab-daemon)
+    else
+      (cd "$root" && python3 Scripts/generate-api.py && swift build -c "$build_configuration" && if [ "$clean" = true ]; then python3 Tools/build-frontend.py --configuration "$build_configuration" --clean; else python3 Tools/build-frontend.py --configuration "$build_configuration"; fi)
     fi
-    export AELAB_PUBLIC="${AELAB_PUBLIC:-$root/Frontend/dist}"
-    # Build configuration belongs to this repository wrapper, not the installed CLI.
-    filtered_count=$#
-    while [ "$filtered_count" -gt 0 ]; do
-      flag=$1; shift; filtered_count=$((filtered_count - 1))
-      if [ "$flag" = "--debug" ]; then continue; fi
-      value=$1; shift; filtered_count=$((filtered_count - 1))
-      if [ "$flag" != "--configuration" ]; then set -- "$@" "$flag" "$value"; fi
+    if [ "$operation" = server ]; then export AELAB_PUBLIC="${AELAB_PUBLIC:-$root/Frontend/dist}"; fi
+    # Remove the wrapper-only build flag, retaining caller-relative paths and flag arguments.
+    remaining=$#
+    while [ "$remaining" -gt 0 ]; do
+      flag=$1; shift; remaining=$((remaining - 1))
+      if [ "$flag" = --clean ]; then continue; fi
+      if [ "$flag" = --service ]; then set -- "$@" "$flag"; continue; fi
+      value=$1; shift; remaining=$((remaining - 1))
+      if [ "$flag" != --configuration ]; then set -- "$@" "$flag" "$value"; fi
     done
-    exec "$root/.build/$build_configuration/aelab" run "$@"
+    if [ "$operation" = install ]; then exec "$root/.build/release/aelab-cli" install --source "$root" "$@"; fi
+    exec "$root/.build/$build_configuration/aelab-cli" "$operation" "$@"
     ;;
+
 esac
 
 for configuration in release debug; do
-  binary="$root/.build/$configuration/aelab"
+  binary="$root/.build/$configuration/aelab-cli"
   if [ -x "$binary" ]; then exec "$binary" "$@"; fi
 done
-printf '%s\n' 'Build first: swift build --product aelab; or run ./.ae run' >&2
+printf '%s\n' 'Build first: swift build --product aelab-cli; or start with ./.ae server / ./.ae daemon' >&2
 exit 1

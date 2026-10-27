@@ -7,6 +7,8 @@ public struct PinnedSession: Codable, Sendable {
     public let number: Int
     public let project: String?
     public let tool: String?
+    public let session: String?
+    public let programStatus: ProgramStatus?
 }
 public struct TerminalMetadata: Encodable, Sendable {
     public let identity: HostIdentity?
@@ -23,16 +25,19 @@ public actor LiveTerminal {
     public let expires: Date
     public private(set) var launch: TerminalLaunch
     public let cwd: String
+    public let fileHost: Host?
     private let identity: HostIdentity?
     private let pty: any TerminalProcess
     private var reader: Task<Void, Never>?
     private var clients: [UUID: AsyncStream<Data>.Continuation] = [:]
+    private var clientLogins: [UUID: String] = [:]
     private var replay = Data()
+    private var programStatus = ProgramStatusObserver()
     public private(set) var ended = false
     public private(set) var pinned = false
     public private(set) var number = 0
-    public init(pty: any TerminalProcess, owner: String, expires: Date, launch: TerminalLaunch, cwd: String, identity: HostIdentity? = nil) {
-        self.pty = pty; self.owner = owner; self.expires = expires; self.launch = launch; self.cwd = cwd; self.identity = identity
+    public init(pty: any TerminalProcess, owner: String, expires: Date, launch: TerminalLaunch, cwd: String, identity: HostIdentity? = nil, fileHost: Host? = nil) {
+        self.pty = pty; self.owner = owner; self.expires = expires; self.launch = launch; self.cwd = cwd; self.identity = identity; self.fileHost = fileHost
     }
     public func start() {
         guard reader == nil, !ended else { return }
@@ -42,21 +47,29 @@ public actor LiveTerminal {
         }
     }
     private func publish(_ data: Data) {
+        programStatus.feed(data)
         replay.append(data); if replay.count > 262_144 { replay = Data(replay.suffix(262_144)) }
         for (id, client) in clients {
-            if case .dropped = client.yield(data) { client.finish(); clients.removeValue(forKey: id) }
+            if case .dropped = client.yield(data) { client.finish(); clients.removeValue(forKey: id); clientLogins.removeValue(forKey: id) }
         }
     }
-    public func subscribe() throws -> (UUID, AsyncStream<Data>, Data) {
+    public func subscribe(login: String? = nil) throws -> (UUID, AsyncStream<Data>, Data) {
         guard !ended else { throw AEError("Terminal has ended") }
         let id = UUID()
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(64))
         clients[id] = continuation
+        clientLogins[id] = login
         continuation.onTermination = { _ in Task { await self.detach(id) } }
         return (id, stream, replay)
     }
     public func detach(_ id: UUID) async {
-        clients.removeValue(forKey: id)?.finish()
+        clients.removeValue(forKey: id)?.finish(); clientLogins.removeValue(forKey: id)
+        if clients.isEmpty && !pinned { await close() }
+    }
+    public func disconnect(login: String) async {
+        let ids = clientLogins.filter { $0.value == login }.map(\.key)
+        guard !ids.isEmpty else { return }
+        for id in ids { clients.removeValue(forKey: id)?.finish(); clientLogins.removeValue(forKey: id) }
         if clients.isEmpty && !pinned { await close() }
     }
     public func setPinned(_ value: Bool, number: Int? = nil) async throws {
@@ -67,13 +80,14 @@ public actor LiveTerminal {
     }
     public func renameHost(from: String, to: String) { if launch.host == from { launch.host = to } }
     public func metadata() -> TerminalMetadata { TerminalMetadata(identity: identity, id: id, pinned: pinned, cwd: cwd, launch: launch) }
-    public func summary() -> PinnedSession { PinnedSession(id: id, host: launch.host, cwd: cwd, number: number, project: launch.project, tool: launch.tool) }
+    public func summary() -> PinnedSession { PinnedSession(id: id, host: launch.host, cwd: cwd, number: number, project: launch.project, tool: launch.tool, session: nil, programStatus: programStatus.primary) }
     public func input(_ data: Data) async throws { guard !ended else { throw AEError("Terminal has ended") }; try await pty.input(data) }
+    public func acknowledgeProgramStatus() { programStatus.acknowledge() }
     public func resize(cols: Int, rows: Int) async throws { try await pty.resize(cols: cols, rows: rows) }
     public func signal(_ value: String) async throws { try await pty.signal(value) }
     public func close() async {
-        guard !ended else { return }; ended = true; pinned = false; await pty.closeSession()
+        guard !ended else { return }; programStatus.commandFinished(); ended = true; pinned = false; await pty.closeSession()
         reader?.cancel(); reader = nil
-        let subscribers = clients.values; clients.removeAll(); for subscriber in subscribers { subscriber.finish() }
+        let subscribers = clients.values; clients.removeAll(); clientLogins.removeAll(); for subscriber in subscribers { subscriber.finish() }
     }
 }
