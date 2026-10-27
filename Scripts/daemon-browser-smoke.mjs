@@ -15,9 +15,9 @@ try {
   // Directory picker and source editor use the daemon without new browser-facing APIs.
   await page.getByRole('button', { name: 'Add project', exact: true }).click();
   await page.getByRole('button', { name: 'Browse Absolute project directory', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Choose host directory', exact: true }).getByRole('button', { name: 'Choose directory', exact: true })).toBeEnabled();
-  await page.getByRole('dialog', { name: 'Choose host directory', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Configure projects', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Select host directory', exact: true }).getByRole('button', { name: 'Select directory', exact: true })).toBeEnabled();
+  await page.getByRole('dialog', { name: 'Select host directory', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Configure project', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Edit script Disk', exact: true }).click();
   await expect(page.getByRole('textbox', { name: /source|script/i })).toBeVisible();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
@@ -29,7 +29,7 @@ try {
   await input.pressSequentially('printf "DAEMON_BROWSER_OK\\n"'); await input.press('Enter');
   await expect(terminal.locator('.xterm-rows > div').filter({ hasText: /^DAEMON_BROWSER_OK\s*$/ }).last()).toBeVisible();
   await expect(terminal.locator('.xterm-rows')).not.toContainText('not a terminal');
-  await terminal.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
+  await expect(terminal.getByRole('button', { name: 'Unpin terminal session', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
   await expect(page.getByRole('region', { name: 'SHELLS', exact: true })).toContainText(/pinned/i);
   await terminal.setViewportSize({ width: 740, height: 520 });

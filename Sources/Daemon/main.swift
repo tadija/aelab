@@ -12,15 +12,19 @@ import Darwin
 
 @main struct Daemon {
     static func main() async {
+        if Array(CommandLine.arguments.dropFirst()) == ["--version"] { print(AelabVersion.display); return }
+        if Array(CommandLine.arguments.dropFirst()) == ["--build"] { print(AelabVersion.build); return }
         do { try await run() }
         catch { FileHandle.standardError.write(Data("aelab-daemon: \(error)\n".utf8)); exit(1) }
     }
     static func run() async throws {
         var args = Array(CommandLine.arguments.dropFirst()); var home = DaemonSetup.defaultHome
-        if args.first == "--home", args.count >= 3 { home = URL(fileURLWithPath: args[1]); args.removeFirst(2) }
-        guard let action = args.first else { throw AEError("Use aelab-daemon [--home PATH] init --endpoint https://HOST:1984 [--bind ADDRESS] | install [OPTIONS] | run | pairing --output FILE") }; args.removeFirst()
-        if ["help", "--help", "-h"].contains(action) { print("aelab-daemon [--home PATH] init --endpoint https://HOST:1984 [--bind ADDRESS] | install [OPTIONS] | run | pairing --output FILE"); return }
-        if action == "install" { try await DaemonInstaller.run(arguments: args, home: home); return }
+        if args.first == "--home" {
+            guard args.count >= 2, !args[1].isEmpty, !args[1].hasPrefix("--") else { throw AEError("--home requires a path") }
+            home = URL(fileURLWithPath: args[1]); args.removeFirst(2)
+        }
+        let action = args.isEmpty ? "" : args.removeFirst()
+        if ["help", "--help", "-h"].contains(action) { print("aelab-daemon [--home PATH] [init --endpoint https://HOST:1984 [--bind ADDRESS] | pairing --output FILE]"); return }
         if action == "init" {
             var endpoint: String?; var bind = "0.0.0.0"
             while args.count >= 2 { let flag = args.removeFirst(); let value = args.removeFirst(); if flag == "--endpoint" { endpoint = value } else if flag == "--bind" { bind = value } else { throw AEError("Unknown init option") } }
@@ -34,7 +38,7 @@ import Darwin
             guard args.count == 2, args[0] == "--output" else { throw AEError("Use pairing --output FILE; transfer the private file securely") }
             try DaemonSetup.privateWrite(data, to: URL(fileURLWithPath: args[1])); return
         }
-        guard action == "run", args.isEmpty else { throw AEError("Unknown daemon command") }
+        guard action.isEmpty, args.isEmpty else { throw AEError("Unknown daemon command") }
         let lock = try DaemonRunLock(home: home)
         defer { withExtendedLifetime(lock) {} }
         let settings = try DaemonSetup.settings(home: home); let pairing = try DaemonSetup.pairing(home: home)
@@ -74,6 +78,7 @@ actor DaemonAdmission {
 }
 actor DaemonSession {
     let outbound: WebSocketOutboundWriter
+    let files = TerminalFileStore()
     var commands: [String: Task<Void, Never>] = [:]
     var terminals: [String: TerminalPTY] = [:]
     var readers: [String: Task<Void, Never>] = [:]
@@ -81,6 +86,27 @@ actor DaemonSession {
     func reply(_ message: DaemonMessage) async throws { try await outbound.write(.text(String(decoding: JSONEncoder().encode(message), as: UTF8.self))) }
     func handle(_ message: DaemonMessage) async throws {
         switch message.operation {
+        case "file-begin", "file-write", "file-finish", "file-abort":
+            do {
+                switch message.operation {
+                case "file-begin":
+                    guard let name = message.name, let size = message.size else { throw AEError("Missing file metadata") }
+                    let id = try await files.begin(name: name, size: size, id: message.id)
+                    try await reply(DaemonMessage(id: message.id, operation: "result", upload: id))
+                case "file-write":
+                    guard let upload = message.upload, let offset = message.offset, let data = message.data else { throw AEError("Missing file chunk") }
+                    try await files.append(upload, offset: offset, data: data)
+                    try await reply(DaemonMessage(id: message.id, operation: "result"))
+                case "file-finish":
+                    guard let upload = message.upload else { throw AEError("Missing file transfer") }
+                    let file = try await files.finish(upload)
+                    try await reply(DaemonMessage(id: message.id, operation: "result", file: file))
+                default:
+                    guard let upload = message.upload else { throw AEError("Missing file transfer") }
+                    await files.abort(upload)
+                    try await reply(DaemonMessage(id: message.id, operation: "result"))
+                }
+            } catch { try await reply(DaemonMessage(id: message.id, operation: "result", error: String(describing: error))) }
         case "execute":
             guard commands.count < 8, commands[message.id] == nil, let script = message.script, let timeout = message.timeout else { try await reply(DaemonMessage(id: message.id, operation: "result", error: "Daemon command limit or invalid command")); return }
             commands[message.id] = Task {
@@ -92,7 +118,7 @@ actor DaemonSession {
                 self.completed(message.id)
                 try? await self.reply(response)
             }
-        case "cancel": commands.removeValue(forKey: message.id)?.cancel()
+        case "cancel": commands.removeValue(forKey: message.id)?.cancel(); await files.abort(message.id)
         case "open":
             guard terminals.count < 16, terminals[message.id] == nil, let script = message.script else { try await reply(DaemonMessage(id: message.id, operation: "result", error: "Daemon terminal limit or invalid terminal")); return }
             let pty = try TerminalPTY(host: Host(name: "daemon", transport: .local), script: script, execution: HostExecution())
@@ -111,7 +137,8 @@ actor DaemonSession {
     }
     func completed(_ id: String) { commands.removeValue(forKey: id) }
     func terminalEnded(_ id: String) { terminals.removeValue(forKey: id); readers.removeValue(forKey: id) }
-    func close() {
+    func close() async {
+        await files.close()
         for task in commands.values { task.cancel() }; commands.removeAll()
         for pty in terminals.values { pty.closeSession() }; terminals.removeAll()
         for task in readers.values { task.cancel() }; readers.removeAll()

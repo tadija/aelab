@@ -7,7 +7,7 @@ private func source(at root: URL) throws -> URL {
     let fm = FileManager.default
     try fm.createDirectory(at: source.appendingPathComponent(".build/release"), withIntermediateDirectories: true)
     try fm.createDirectory(at: source.appendingPathComponent("Frontend/dist/assets"), withIntermediateDirectories: true)
-    for name in ["aelab", "aelab-server"] {
+    for name in ["aelab-cli", "aelab-server", "aelab-daemon"] {
         let path = source.appendingPathComponent(".build/release/" + name)
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: path)
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path.path)
@@ -25,14 +25,19 @@ private func source(at root: URL) throws -> URL {
     let source = try source(at: root)
     let location = Installation.location(prefix: root.appendingPathComponent("prefix with spaces"))
     try location.install(source: source)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: location.bin.appendingPathComponent("aelab").path) == "aelab-cli")
+    #expect(FileManager.default.isExecutableFile(atPath: location.bin.appendingPathComponent("aelab-cli").path))
+    #expect(!FileManager.default.fileExists(atPath: location.application.appendingPathComponent("current/bin/aelab").path))
     let first = try FileManager.default.destinationOfSymbolicLink(atPath: location.application.appendingPathComponent("current").path)
     #expect(FileManager.default.isExecutableFile(atPath: location.bin.appendingPathComponent("aelab").path))
     #expect(FileManager.default.isExecutableFile(atPath: location.bin.appendingPathComponent("aelab-server").path))
+    #expect(FileManager.default.isExecutableFile(atPath: location.bin.appendingPathComponent("aelab-daemon").path))
     #expect(try String(contentsOf: location.application.appendingPathComponent("current/public/assets/app.js"), encoding: .utf8) == "asset")
     #expect(try String(contentsOf: location.application.appendingPathComponent("current/config/aelab.example.json"), encoding: .utf8) == "{\"version\":1,\"hosts\":[]}")
     try Data("updated dashboard".utf8).write(to: source.appendingPathComponent("Frontend/dist/index.html"))
     try location.install(source: source)
     #expect(try FileManager.default.destinationOfSymbolicLink(atPath: location.application.appendingPathComponent("current").path) != first)
+    #expect(location.bin.appendingPathComponent("aelab").resolvingSymlinksInPath() == location.bin.appendingPathComponent("aelab-cli").resolvingSymlinksInPath())
     try FileManager.default.removeItem(at: source)
     #expect(try String(contentsOf: location.application.appendingPathComponent("current/public/index.html"), encoding: .utf8) == "updated dashboard")
     #expect(FileManager.default.isExecutableFile(atPath: location.bin.appendingPathComponent("aelab").path))
@@ -48,6 +53,12 @@ private func source(at root: URL) throws -> URL {
     try Data("unrelated".utf8).write(to: unrelated)
     #expect(throws: (any Error).self) { try location.install(source: source) }
     #expect(try String(contentsOf: unrelated, encoding: .utf8) == "unrelated")
+    try FileManager.default.removeItem(at: unrelated)
+    let foreign = root.appendingPathComponent("foreign")
+    try Data("keep me".utf8).write(to: foreign)
+    try FileManager.default.createSymbolicLink(at: unrelated, withDestinationURL: foreign)
+    #expect(throws: (any Error).self) { try location.install(source: source) }
+    #expect(try String(contentsOf: foreign, encoding: .utf8) == "keep me")
     try FileManager.default.removeItem(at: unrelated)
     try FileManager.default.createDirectory(at: location.application, withIntermediateDirectories: true)
     try FileManager.default.createSymbolicLink(atPath: location.application.appendingPathComponent("current").path, withDestinationPath: "/unrelated")
@@ -76,4 +87,41 @@ private func source(at root: URL) throws -> URL {
     let prefix = Installation.location(prefix: URL(fileURLWithPath: "/tmp/prefix"), environment: ["XDG_DATA_HOME": "/tmp/ignored"])
     #expect(prefix.bin.path == "/tmp/prefix/bin")
     #expect(prefix.application.path == "/tmp/prefix/share/aelab")
+}
+
+@Test func installationRequiresTheDaemonAndPreservesDaemonExecutableCollisions() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = try source(at: root)
+    let location = Installation.location(prefix: root.appendingPathComponent("install"))
+    let daemon = source.appendingPathComponent(".build/release/aelab-daemon")
+    try FileManager.default.removeItem(at: daemon)
+    #expect(throws: (any Error).self) { try location.install(source: source) }
+    #expect(!FileManager.default.fileExists(atPath: location.application.path))
+    try Data("#!/bin/sh\nexit 0\n".utf8).write(to: daemon)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: daemon.path)
+    try FileManager.default.createDirectory(at: location.bin, withIntermediateDirectories: true)
+    let unrelated = location.bin.appendingPathComponent("aelab-daemon")
+    try Data("unrelated daemon".utf8).write(to: unrelated)
+    #expect(throws: (any Error).self) { try location.install(source: source) }
+    #expect(try String(contentsOf: unrelated, encoding: .utf8) == "unrelated daemon")
+    #expect(!FileManager.default.fileExists(atPath: location.application.path))
+}
+
+@Test func identicalInstallationsReuseTheReleaseAndRepairMissingCommandLinks() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = try source(at: root)
+    let location = Installation.location(prefix: root.appendingPathComponent("install"))
+    #expect(try location.install(source: source))
+    let current = location.application.appendingPathComponent("current")
+    let first = try FileManager.default.destinationOfSymbolicLink(atPath: current.path)
+    try FileManager.default.removeItem(at: location.bin.appendingPathComponent("aelab"))
+    #expect(try !location.install(source: source))
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: current.path) == first)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: location.bin.appendingPathComponent("aelab").path) == "aelab-cli")
+    #expect(try FileManager.default.contentsOfDirectory(atPath: location.application.appendingPathComponent("releases").path).count == 1)
+    try Data("changed CLI".utf8).write(to: source.appendingPathComponent(".build/release/aelab-cli"))
+    #expect(try location.install(source: source))
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: current.path) != first)
 }

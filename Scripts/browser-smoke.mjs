@@ -20,6 +20,9 @@ try {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin);
   await expect(page.locator('.login .brand svg circle')).toHaveCount(2);
+  await expect(page.getByLabel('Administrator password')).toBeFocused();
+  await page.reload();
+  await expect(page.getByLabel('Administrator password')).toBeFocused();
   await page.getByLabel('Administrator password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: 'Check all' }).waitFor();
@@ -31,12 +34,20 @@ try {
   await expect(reference.locator('html')).toHaveCSS('background-color', 'rgb(244, 241, 234)');
   await reference.reload();
   await expect(reference.locator('html')).toHaveCSS('background-color', 'rgb(244, 241, 234)');
-  await reference.locator('summary').first().click();
-  await expect(reference.locator('details pre').first()).toBeVisible();
-  const hostsAPI = reference.locator('#routes > details.route-group');
+  await reference.locator('#routes > details.route-group > summary').filter({ hasText: /^\/api\/docs$/ }).click();
+  await reference.locator('summary').filter({ hasText: /^GET\s*\/api\/docs$/ }).click();
+  await expect(reference.locator('details pre:visible').first()).toBeVisible();
+  const hostsAPI = reference.locator('#routes > details.route-group').filter({ has: reference.locator(':scope > summary', { hasText: /^\/api\/hosts\/\{host\}$/ }) });
   await expect(hostsAPI.locator(':scope > summary')).toHaveText('/api/hosts/{host}');
   await expect(hostsAPI).toHaveJSProperty('open', false);
-  const schema = await (await reference.request.get(`${origin}/api/openapi.json`)).json();
+  const schema = await (await reference.request.get(`${origin}/api/docs/openapi.json`)).json();
+  for (const prefix of ['/api/auth', '/api/config', '/api/state', '/api/docs']) {
+    const section = reference.locator('#routes > details.route-group').filter({ has: reference.locator(':scope > summary', { hasText: new RegExp(`^${prefix}$`) }) });
+    await expect(section).toHaveCount(1);
+    const count = Object.entries(schema.paths).filter(([path]) => path === prefix || path.startsWith(`${prefix}/`)).reduce((sum, [, methods]) => sum + Object.keys(methods).length, 0);
+    await expect(section.locator('details:not(.route-group)')).toHaveCount(count);
+    await expect(section).toHaveJSProperty('open', prefix === '/api/docs');
+  }
   const hostOperations = Object.entries(schema.paths).filter(([path]) => path.startsWith('/api/hosts/{host}/')).reduce((sum, [, methods]) => sum + Object.keys(methods).length, 0);
   await expect(hostsAPI.locator('details:not(.route-group)')).toHaveCount(hostOperations);
   await hostsAPI.locator(':scope > summary').click();
@@ -50,7 +61,7 @@ try {
   await page.getByRole('button', { name: 'Add host' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Browser fixture');
   await page.getByLabel('Approved SSH alias / user@address').fill('browser-fixture');
-  await page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Host tint').evaluate(element => { element.value = '#8b5cf6'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.getByRole('dialog', { name: 'Configure host' }).getByLabel('Host tint').evaluate(element => { element.value = '#8b5cf6'; element.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('button', { name: 'Browser fixture', exact: true }).waitFor();
   const createdConfig = (await configSnapshot()).config;
@@ -58,23 +69,23 @@ try {
   const overview = page.getByRole('region', { name: 'HOSTS', exact: true });
   const hostRow = overview.locator('li').filter({ hasText: 'browser-fixture' });
   await hostRow.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Host tint')).toHaveValue('#8b5cf6');
-  await page.evaluate(() => { localStorage.setItem('aelab-theme:browser-fixture', 'light'); localStorage.setItem('aelab-layout:browser-fixture', 'compact'); localStorage.setItem('aelab-tty-cwd-background:browser-fixture:/tmp', '#123456'); });
+  await expect(page.getByRole('dialog', { name: 'Configure host' }).getByLabel('Host tint')).toHaveValue('#8b5cf6');
+  await page.evaluate(() => { localStorage.setItem('aelab-theme:browser-fixture', 'light'); localStorage.setItem('aelab-tty-cwd-background:browser-fixture:/tmp', '#123456'); });
   await page.getByLabel('Name', { exact: true }).fill('Renamed fixture');
-  await page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Host tint').evaluate(element => { element.value = '#c2410c'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.getByRole('dialog', { name: 'Configure host' }).getByLabel('Host tint').evaluate(element => { element.value = '#c2410c'; element.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Configure hosts' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Configure host' })).toBeHidden();
   if (!(await configSnapshot()).config.hosts.some(h => h.id === 'renamed-fixture' && h.name === 'Renamed fixture')) throw new Error('Editing a name did not change its derived ID');
-  expect(await page.evaluate(() => [localStorage.getItem('aelab-theme:renamed-fixture'), localStorage.getItem('aelab-tty-cwd-background:renamed-fixture:/tmp'), localStorage.getItem('aelab-layout:renamed-fixture')])).toEqual(['light', '#123456', 'compact']);
+  expect(await page.evaluate(() => [localStorage.getItem('aelab-theme:renamed-fixture'), localStorage.getItem('aelab-tty-cwd-background:renamed-fixture:/tmp')])).toEqual(['light', '#123456']);
   await expect(hostRow.locator('.row-title')).toHaveCSS('color', 'rgb(194, 65, 12)');
   const contextConfig = await configSnapshot(); contextConfig.config.hosts.find(host => host.id === 'renamed-fixture').dockerContext = 'desktop-linux';
   const contextCSRF = (await (await page.request.get(`${origin}/api/auth/session`)).json()).csrf;
   const contextSaved = await page.request.put(`${origin}/api/config`, { headers: { Origin: origin, 'X-CSRF-Token': contextCSRF }, data: contextConfig });
   if (!contextSaved.ok()) throw new Error(await contextSaved.text());
   await page.reload(); await hostRow.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Docker context (optional)', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Configure host' }).getByLabel('Docker context (optional)', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Configure hosts' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Configure host' })).toBeHidden();
   if (!(await configSnapshot()).config.hosts.some(host => host.id === 'renamed-fixture' && host.dockerContext === 'desktop-linux')) throw new Error('Docker context did not persist');
   await expect(hostRow.locator('.badge')).toHaveCSS('text-transform', 'uppercase');
   const dragPlacement = await hostRow.evaluate(row => {
@@ -152,22 +163,22 @@ try {
   // Never select it: this fixture is configuration only, not simulated SSH discovery.
   if (process.env.AELAB_TEST_SSH) {
     await page.goto(`${origin}/hosts/fixture-1/`);
-    await expect(page.getByLabel('Host tint')).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Screensaver', exact: true })).toBeEnabled();
     // Definitions are global; projects and services stay on their host. IDs follow names on rename.
-    const projectParent = (await configSnapshot()).config.hosts.find(host => host.id === 'fixture-1').projects[0].directory;
+    const projectParent = (await configSnapshot()).config.hosts.find(host => host.id === 'fixture-1').projects[0].dir;
     for (const id of ['fixture-1','fixture-3']) {
       await page.goto(`${origin}/hosts/${id}/`);
       await page.getByRole('button', { name: 'Add project', exact: true }).click();
-      const projectForm = page.getByRole('dialog', { name: 'Configure projects', exact: true });
+      const projectForm = page.getByRole('dialog', { name: 'Configure project', exact: true });
       await projectForm.getByRole('button', { name: 'Browse Absolute project directory', exact: true }).click();
-      const picker = page.getByRole('dialog', { name: 'Choose host directory', exact: true });
-      try { await expect(picker.getByRole('button', { name: 'Choose directory', exact: true })).toBeEnabled(); }
+      const picker = page.getByRole('dialog', { name: 'Select host directory', exact: true });
+      try { await expect(picker.getByRole('button', { name: 'Select directory', exact: true })).toBeEnabled(); }
       catch (e) { console.log('Directory picker failed', id, await picker.innerText()); throw e; }
-      await picker.getByRole('button', { name: 'Expand directory directory picker', exact: true }).click();
+      await picker.getByRole('button', { name: 'directory picker', exact: true }).click();
       await expect(picker.getByRole('button', { name: 'private-file.txt', exact: true })).toHaveCount(0);
       await expect(picker.getByRole('button', { name: 'loop', exact: true })).toHaveCount(0);
       await picker.getByRole('button', { name: 'nested', exact: true }).click();
-      await picker.getByRole('button', { name: 'Choose directory', exact: true }).click();
+      await picker.getByRole('button', { name: 'Select directory', exact: true }).click();
       await expect(projectForm.getByLabel('Absolute project directory', { exact: true })).toHaveValue(/directory picker\/nested$/);
       await projectForm.getByRole('button', { name: 'Cancel', exact: true }).click();
     }
@@ -271,7 +282,7 @@ try {
     await page.getByRole('button', { name: 'Host launch menu', exact: true }).click();
     await page.keyboard.press('Escape'); await expect(page.locator('.launch-options')).toHaveCount(0);
     await page.getByRole('button', { name: 'Edit host', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Configure hosts' }).getByLabel('Name', { exact: true })).toHaveValue('Fixture 1');
+    await expect(page.getByRole('dialog', { name: 'Configure host' }).getByLabel('Name', { exact: true })).toHaveValue('Fixture 1');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByRole('region', { name: 'SHELLS', exact: true }).getByRole('button', { name: 'Open shell' })).toHaveCount(0);
     const beforeTemporary = (await (await page.request.get(`${origin}/api/hosts/fixture-1/status`)).json()).tmux.output;
@@ -284,7 +295,7 @@ try {
       if (index) await expect(temporary.locator('.xterm-rows')).toContainText('PROJECT_TOOL_OK');
       await temporary.locator('.xterm-helper-textarea').pressSequentially('pwd'); await temporary.locator('.xterm-helper-textarea').press('Enter');
       const cfg = (await configSnapshot()).config;
-      await expect(temporary.locator('.xterm-rows')).toContainText(cfg.hosts.find(h => h.id === 'fixture-1').projects[0].directory);
+      await expect(temporary.locator('.xterm-rows')).toContainText(cfg.hosts.find(h => h.id === 'fixture-1').projects[0].dir);
       if (temporary.url().includes('persistent=1') || temporary.url().includes('/tmux/')) throw new Error('Ordinary project launch created tmux');
       await temporary.close();
     }
@@ -317,11 +328,11 @@ try {
     // Normal title links use the same picker without enabling YOLO.
     const normalTool = page.getByRole('region', { name: 'TOOLS', exact: true }).getByRole('link', { name: 'Tool 1', exact: true });
     await normalTool.click();
-    const normalPicker = page.getByRole('dialog', { name: 'Choose host directory', exact: true });
-    await expect(normalPicker.getByRole('button', { name: 'Choose directory', exact: true })).toBeEnabled();
+    const normalPicker = page.getByRole('dialog', { name: 'Select host directory', exact: true });
+    await expect(normalPicker.getByRole('button', { name: 'Select directory', exact: true })).toBeEnabled();
     const normalPath = await normalPicker.locator('.directory-current').textContent();
     const normalOpened = context.waitForEvent('page');
-    await normalPicker.getByRole('button', { name: 'Choose directory', exact: true }).click();
+    await normalPicker.getByRole('button', { name: 'Select directory', exact: true }).click();
     const normalPage = await normalOpened;
     await expect(normalPage.locator('.xterm-rows')).toContainText('HOST-1');
     expect(new URL(normalPage.url()).searchParams.get('directory')).toBe(normalPath);
@@ -332,9 +343,9 @@ try {
     const pickerHome = (await (await page.request.get(`${origin}/api/hosts/fixture-1/directories`)).json()).path;
     const yoloOpened = context.waitForEvent('page');
     await page.getByRole('region', { name: 'TOOLS', exact: true }).locator('li').filter({ has: page.getByRole('link', { name: 'Tool 1', exact: true }) }).getByRole('button', { name: 'YOLO', exact: true }).click();
-    const yoloPicker = page.getByRole('dialog', { name: 'Choose host directory', exact: true });
+    const yoloPicker = page.getByRole('dialog', { name: 'Select host directory', exact: true });
     await expect(yoloPicker.locator('.directory-selection')).toContainText(pickerHome);
-    await yoloPicker.getByRole('button', { name: 'Choose directory', exact: true }).click();
+    await yoloPicker.getByRole('button', { name: 'Select directory', exact: true }).click();
     const yoloPage = await yoloOpened;
     await expect(yoloPage.locator('.xterm-rows')).toContainText('HOST-1');
     if (new URL(yoloPage.url()).searchParams.get('directory') !== pickerHome) throw new Error('YOLO directory not preserved');
@@ -356,7 +367,7 @@ try {
     await normalTool.click();
     const normalDefault = await normalDefaultOpened;
     await expect(normalDefault.locator('.xterm-rows')).toContainText('HOST-1');
-    await expect(page.getByRole('dialog', { name: 'Choose host directory', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Select host directory', exact: true })).toHaveCount(0);
     expect(new URL(normalDefault.url()).searchParams.get('yolo')).not.toBe('1');
     await normalDefault.close();
     const yoloToggle = projectRows.getByRole('button', { name: 'YOLO mode for Project 1', exact: true });
@@ -464,7 +475,7 @@ try {
     const extension = page.getByRole('region', { name: 'PLUGINS', exact: true });
     await expect(extension).toContainText('Root filesystem:');
     await expect(extension.locator('.plugin-details')).toContainText('Mount');
-    await expect.poll(() => page.locator('main > section > h2 > .section-toggle').allTextContents()).toEqual(['▾PROJECTS','▾TOOLS','▾SERVICES','▾PLUGINS']);
+    await expect.poll(() => page.locator('.dashboard-content > section > h2 > .section-toggle').allTextContents()).toEqual(['▾PROJECTS','▾TOOLS','▾PLUGINS','▾SERVICES']);
     await expect(page.getByRole('region', { name: 'SHELLS', exact: true }).getByRole('heading')).toHaveCount(0);
     await page.getByRole('button', { name: 'Hide shells', exact: true }).click();
     await expect(page.getByRole('region', { name: 'SHELLS', exact: true })).toHaveCount(0);
@@ -476,17 +487,24 @@ try {
     await expect(page.getByRole('region', { name: 'TOOLS', exact: true }).getByRole('button', { name: 'Discovery tools', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'SERVICES', exact: true }).getByRole('button', { name: 'Discovery services', exact: true })).toBeVisible();
     await expect(page.locator('body')).toHaveCSS('font-size', '16px');
-    await page.getByLabel('Host tint').evaluate(element => { element.value = '#c75b39'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+    async function setTint(value) {
+      await page.getByRole('button', { name: 'Edit host', exact: true }).click();
+      const form = page.getByRole('dialog', { name: 'Configure host' });
+      await form.getByLabel('Host tint').evaluate((element, tint) => { element.value = tint; element.dispatchEvent(new Event('input', { bubbles: true })); }, value);
+      await form.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(form).toHaveCount(0);
+    }
+    await setTint('#c75b39');
     await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--accent'))).toBe('#c75b39');
     await page.getByRole('button', { name: 'Toggle theme' }).click();
-    await page.reload(); await expect(page.getByLabel('Host tint')).toBeEnabled();
+    await page.reload(); await expect(page.getByRole('button', { name: 'Screensaver', exact: true })).toBeEnabled();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--accent'))).toBe('#c75b39');
-    await page.goto(`${origin}/hosts/fixture-2/`); await expect(page.getByLabel('Host tint')).toBeEnabled();
+    await page.goto(`${origin}/hosts/fixture-2/`); await expect(page.getByRole('button', { name: 'Screensaver', exact: true })).toBeEnabled();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--accent'))).not.toBe('#c75b39');
-    await page.getByLabel('Host tint').evaluate(element => { element.value = '#346bd6'; element.dispatchEvent(new Event('input', { bubbles: true })); });
-    await page.goto(`${origin}/hosts/fixture-1/`); await expect(page.getByLabel('Host tint')).toBeEnabled();
+    await setTint('#346bd6');
+    await page.goto(`${origin}/hosts/fixture-1/`); await expect(page.getByRole('button', { name: 'Screensaver', exact: true })).toBeEnabled();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--accent'))).toBe('#c75b39');
     await expect(page.locator('.hosts button.active')).toHaveCSS('color', 'rgb(255, 255, 255)');
@@ -575,7 +593,7 @@ try {
       }
       await expect(shell.locator('.terminal-page')).toHaveCSS('background-color', 'rgb(34, 51, 68)');
       await expect(shell.locator('.terminal-meta input[type=color]')).toHaveCount(1);
-      await expect(shell.locator('.terminal-color')).toHaveCSS('background-color', 'rgb(34, 51, 68)');
+      await expect(shell.locator('.terminal-logo circle')).toHaveCount(2);
       await expect(shell.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(0);
       await shell.getByRole('button', { name: 'Collapse header', exact: true }).click();
       await expect(shell.locator('.terminal-page')).toHaveClass(/header-collapsed/);
@@ -613,7 +631,7 @@ try {
       if (number === 1) {
         for (const [name, id] of [['Renamed host', 'renamed-host'], ['Fixture 1', 'fixture-1']]) {
           await page.getByRole('button', { name: 'Edit host', exact: true }).click();
-          const hostForm = page.getByRole('dialog', { name: 'Configure hosts', exact: true });
+          const hostForm = page.getByRole('dialog', { name: 'Configure host', exact: true });
           await hostForm.getByLabel('Name', { exact: true }).fill(name);
           await hostForm.getByRole('button', { name: 'Save', exact: true }).click();
           await expect(hostForm).toBeHidden(); await expect(page).toHaveURL(`${origin}/hosts/${id}/`);
@@ -640,11 +658,11 @@ try {
       await expect(page.locator('.host-shells .pin-number')).toHaveText(String(pins[0].number));
       const numberBox = await page.locator('.host-shells .pin-number').boundingBox();
       const badgeBox = await page.locator('.host-shells .pinned-row .row-title').boundingBox();
-      if (numberBox.x < badgeBox.x + badgeBox.width) throw new Error('Pin number precedes the title');
-      if (numberBox.x - badgeBox.x - badgeBox.width > 12) throw new Error('Pin number is separated by a spacer');
+      if (numberBox.x + numberBox.width > badgeBox.x) throw new Error('Pin number must precede the title');
+      if (badgeBox.x - numberBox.x - numberBox.width > 12) throw new Error('Pin number is separated by a spacer');
       await expect(page.locator('.host-shells .pin-number')).toHaveCSS('border-radius', '50%');
       await page.getByRole('button', { name: 'Hide shells', exact: true }).click();
-      const collapsedPin = page.locator('.host-launch').getByRole('link', { name: `Open pinned shell ${pins[0].number}`, exact: true });
+      const collapsedPin = page.locator('.host-picker-row').getByRole('link', { name: `Open pinned shell ${pins[0].number}`, exact: true });
       await expect(collapsedPin).toBeVisible();
       const collapsedPage = context.waitForEvent('page'); await collapsedPin.click();
       const collapsedTerminal = await collapsedPage; await collapsedTerminal.getByText('connected', { exact: true }).waitFor(); await collapsedTerminal.close();
@@ -656,14 +674,14 @@ try {
       const numbered = await shortcutPage; await numbered.getByText('connected', { exact: true }).waitFor();
       if (!numbered.url().includes(`/pinned/${pins[0].id}/`)) throw new Error('Numeric shortcut opened the wrong terminal');
       await numbered.close();
-      const sessionFilter = page.getByRole('button', { name: 'Pinned shells only', exact: true });
+      const sessionFilter = page.getByRole('group', { name: 'Shell filter' }).getByRole('button', { name: 'pinned', exact: true });
       await expect(sessionFilter).toHaveAttribute('aria-pressed', 'false');
       await sessionFilter.click();
       await expect(sessionFilter).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('.host-shells .tmux-badge')).toHaveCount(0);
       await expect(page.locator('.host-shells .pinned-badge')).toHaveCount(1);
       const pinColor = await page.locator('.pinned-badge').evaluate(el => getComputedStyle(el).backgroundColor);
-      await sessionFilter.click();
+      await page.getByRole('group', { name: 'Shell filter' }).getByRole('button', { name: 'all', exact: true }).click();
       await expect(page.locator('.hosts').getByRole('button', { name: 'all', exact: true })).toBeVisible();
       const sessionBackground = await page.locator('.host-shells li').first().evaluate(el => getComputedStyle(el).backgroundColor);
       const rowBackground = await page.getByRole('region', { name: 'PROJECTS', exact: true }).locator('li').first().evaluate(el => getComputedStyle(el).backgroundColor);
@@ -699,7 +717,7 @@ try {
       await marker.waitFor({ timeout: 10000 });
       const snapshot = await tty.request.get(`${origin}/api/config`);
       const cfg = identify((await snapshot.json()).config);
-      const directory = cfg.hosts.find(h => h.id === `fixture-${number}`).projects.find(p => p.id === `project-${number}`).directory;
+      const directory = cfg.hosts.find(h => h.id === `fixture-${number}`).projects.find(p => p.id === `project-${number}`).dir;
       await expect(tty.locator('.xterm-rows')).toContainText(directory);
       const bounds = await marker.boundingBox();
       // Shift forces xterm selection even when remote tmux enables mouse reporting.

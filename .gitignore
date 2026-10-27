@@ -18,3 +18,5 @@ Docs/Packaging/home/
 Docs/Packaging/ssh/
 Docs/Packaging/server.env
 .env
+
+/BUILD

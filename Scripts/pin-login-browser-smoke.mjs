@@ -1,0 +1,55 @@
+import { chromium } from '../Frontend/node_modules/playwright/index.mjs';
+import { expect } from '../Frontend/node_modules/@playwright/test/index.mjs';
+const origin = process.env.AELAB_TEST_ORIGIN, base = '/lab/aelab';
+const browser = await chromium.launch({ headless: true, ...(process.env.AELAB_TEST_BROWSER ? { executablePath: process.env.AELAB_TEST_BROWSER } : {}) });
+try {
+  const context = await browser.newContext(), page = await context.newPage(), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const login = async () => {
+    await page.getByLabel('Administrator password').fill(process.env.AELAB_TEST_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  };
+  await page.goto(origin + base + '/hosts/local/'); await login();
+  const tmuxOpened = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'pin-work', exact: true }).click(); const tmux = await tmuxOpened;
+  await expect(tmux.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  await tmux.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
+  await expect(tmux.getByRole('button', { name: 'Unpin terminal session', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Host launch menu', exact: true }).click();
+  const shellOpened = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Shell', exact: true }).click(); const shell = await shellOpened;
+  await expect(shell.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  const input = shell.locator('.xterm-helper-textarea');
+  await input.focus(); await input.pressSequentially("AELAB_PIN_MARKER=survived-login; printf 'PIN_READY\\n'"); await input.press('Enter');
+  await expect(shell.locator('.xterm-rows > div').filter({ hasText: /^PIN_READY\s*$/ }).last()).toBeVisible();
+  await shell.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
+  await expect(shell.getByRole('button', { name: 'Unpin terminal session', exact: true })).toBeVisible();
+  const before = await (await context.request.get(origin + base + '/api/hosts/local/terminals')).json();
+  expect(before).toHaveLength(2);
+  const native = before.find(pin => !pin.session), savedTmux = before.find(pin => pin.session);
+  const oldCookie = (await context.cookies()).find(cookie => cookie.name === 'aelab');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByLabel('Administrator password')).toBeVisible();
+  await expect(shell.locator('.terminal-status')).toHaveAttribute('data-status', 'disconnected', { timeout: 2000 });
+  await expect(tmux.locator('.terminal-status')).toHaveAttribute('data-status', 'disconnected', { timeout: 2000 });
+  expect((await context.request.get(origin + base + '/api/hosts/local/terminals')).status()).toBe(401);
+  expect((await context.request.get(origin + base + '/api/hosts/local/terminals', { headers: { Cookie: 'aelab=' + oldCookie.value } })).status()).toBe(401);
+  // Remain signed out across a reaper pass; this catches login-owned cleanup regressions.
+  await page.waitForTimeout(16000);
+  await login();
+  const after = await (await context.request.get(origin + base + '/api/hosts/local/terminals')).json();
+  expect(after.map(pin => [pin.id, pin.number, pin.session])).toEqual(before.map(pin => [pin.id, pin.number, pin.session]));
+  const resumed = await context.newPage();
+  await resumed.goto(origin + base + `/hosts/local/tty/pinned/${native.id}/`);
+  await expect(resumed.locator('.terminal-status')).toHaveAttribute('data-status', 'connected');
+  const resumedInput = resumed.locator('.xterm-helper-textarea');
+  await resumedInput.focus(); await resumedInput.pressSequentially('printf "%s\\n" "$AELAB_PIN_MARKER"'); await resumedInput.press('Enter');
+  await expect(resumed.locator('.xterm-rows > div').filter({ hasText: /^survived-login\s*$/ }).last()).toBeVisible();
+  const auth = await (await context.request.get(origin + base + '/api/auth/session')).json();
+  const headers = { Origin: origin, 'X-CSRF-Token': auth.csrf };
+  expect((await context.request.delete(origin + base + `/api/hosts/local/terminals/${native.id}`, { headers })).status()).toBe(200);
+  expect((await context.request.delete(origin + base + `/api/hosts/local/tmux/sessions/${savedTmux.session}`, { headers })).status()).toBe(200);
+  expect(errors).toEqual([]);
+  console.log('Pins survive logout, reaping and new login with stable IDs/numbers; old access closes and the same shell resumes');
+} finally { await browser.close(); }

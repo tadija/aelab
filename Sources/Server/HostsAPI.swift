@@ -22,12 +22,18 @@ struct HostsAPI: Sendable {
             await handle(request, mutation: true) { _ in
                 struct Rename: Decodable { let name: String }
                 let value = try await decode(Rename.self, request)
-                return try json(await operations.renameSession(host: context.parameters.get("host")!, session: context.parameters.get("session")!, name: value.name))
+                let host = context.parameters.get("host")!, name = context.parameters.get("session")!
+                let result = try await operations.renameSession(host: host, session: name, name: value.name)
+                if result.status == 0 { try await terminals.updateTmuxSession(host: host, session: name, renamed: value.name) }
+                return try json(result)
             }
         }
         router.delete("/api/hosts/{host}/tmux/sessions/{session}") { request, context in
             await handle(request, mutation: true) { _ in
-                return try json(await operations.killSession(host: context.parameters.get("host")!, session: context.parameters.get("session")!))
+                let host = context.parameters.get("host")!, name = context.parameters.get("session")!
+                let result = try await operations.killSession(host: host, session: name)
+                if result.status == 0 { try await terminals.updateTmuxSession(host: host, session: name) }
+                return try json(result)
             }
         }
         router.get("/api/hosts/{host}/directories") { request, context in
@@ -96,7 +102,16 @@ struct HostsAPI: Sendable {
         }
         router.get("/api/hosts/{host}/status") { request, context in
             await handle(request) { _ in
-                return try json(await operations.observe(context.parameters.get("host")!))
+                let host = context.parameters.get("host")!
+                let started = Date()
+                let observation = try await operations.observe(host)
+                if let tmux = observation.tmux, tmux.status == 0, !tmux.truncated {
+                    try await terminals.reconcileTmux(host: host, sessions: Set(tmux.output.split(separator: "\n").map { $0.split(separator: "|").first.map(String.init) ?? "" }), observedSince: started)
+                } else if let tmux = observation.tmux, tmux.status == 1,
+                          tmux.error.contains("no server running on ") || tmux.error.contains("no sessions") {
+                    try await terminals.reconcileTmux(host: host, sessions: [], observedSince: started)
+                }
+                return try json(observation)
             }
         }
         router.get("/api/hosts/{host}/services/{service}") { request, context in
@@ -118,14 +133,20 @@ struct HostsAPI: Sendable {
         router.get("/api/hosts/{host}/terminals") { request, context in
             await handle(request) { session in
                 let host = context.parameters.get("host")!; _ = try await store.read().config.host(host)
-                return try json(await terminals.pinned(host: host, owner: session.token))
+                return try json(await terminals.pinned(host: host, owner: session.owner))
+            }
+        }
+        router.get("/api/hosts/{host}/temporary-terminals") { request, context in
+            await handle(request) { session in
+                let host = context.parameters.get("host")!; _ = try await store.read().config.host(host)
+                return try json(await terminals.temporary(host: host, owner: session.owner))
             }
         }
         router.delete("/api/hosts/{host}/terminals/{terminal}") { request, context in
             await handle(request, mutation: true) { session in
                 let host = context.parameters.get("host")!, id = context.parameters.get("terminal")!
                 _ = try await store.read().config.host(host)
-                try await terminals.closePinned(id, host: host, owner: session.token)
+                try await terminals.closePinned(id, host: host, owner: session.owner, allowTemporary: true)
                 try await store.audit("terminal-delete", host: host, target: id, outcome: "closed")
                 return try json(["ok": true])
             }
@@ -136,7 +157,7 @@ struct HostsAPI: Sendable {
                 let config = try await store.read().config
                 if let pinned = launch.pinned {
                     _ = try config.host(launch.host)
-                    _ = try await terminals.retained(pinned, host: launch.host, owner: session.token)
+                    _ = try await terminals.retained(pinned, host: launch.host, owner: session.owner, allowTemporary: true)
                     return try json(TerminalTicket(ticket: await terminals.issue(launch, owner: session.token), session: nil, prefix: "C-b"))
                 }
                 if launch.session == nil, launch.tool == nil, launch.persistent != false,

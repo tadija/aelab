@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated run orchestration test with real CLI, admin setup and HTTP server.
+"""Isolated server launch orchestration test with real CLI, admin setup and HTTP server.
 
 Build commands are recorded stand-ins; build the release binaries and frontend first.
 No production home, server or SSH configuration is touched.
@@ -23,7 +23,7 @@ from fixtures import ROOT, free_port
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='aelab-run-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='aelab-server-') as temporary:
         root = Path(temporary)
         home = root / 'private home'
         commands = root / 'commands'
@@ -31,7 +31,7 @@ def main():
         log = root / 'build.log'
         for command in ['swift', 'npm']:
             path = commands / command
-            path.write_text('#!/bin/sh\nset -eu\nprintf "%s|%s|%s\\n" "$PWD" "${0##*/}" "$*" >> "$RUN_TEST_LOG"\n')
+            path.write_text('#!/bin/sh\nset -eu\nif [ "${1:-}" = --version ]; then printf \'%s\\n\' fixture-npm; exit 0; fi\nprintf "%s|%s|%s\\n" "$PWD" "${0##*/}" "$*" >> "$RUN_TEST_LOG"\n')
             path.chmod(0o755)
         env = dict(os.environ, PATH=str(commands) + os.pathsep + os.environ['PATH'], RUN_TEST_LOG=str(log))
         for key in ['AELAB_HOME', 'AELAB_PORT', 'AELAB_ORIGIN', 'AELAB_PUBLIC', 'AELAB_BIND']:
@@ -44,17 +44,19 @@ def main():
             master, slave = pty.openpty()
             command_env = dict(env)
             if attempt < 2:
-                arguments = ['run', '--home', str(home)] if attempt == 0 else ['--home', 'private home', 'run', '--debug']
+                arguments = ['server', '--home', str(home)] if attempt == 0 else ['--home', 'private home', 'server', '--configuration', 'debug']
                 command = [str(ROOT / '.ae'), *arguments, '--port', str(port)]
             else:
                 prefix = root / 'installed application'
                 if attempt == 2:
                     subprocess.run([str(ROOT / '.ae'), 'install', '--prefix', str(prefix)],
                                    cwd=root, env=env, check=True, capture_output=True, text=True, timeout=15)
-                assert not (prefix/'bin/aelab-daemon').exists()
+                assert (prefix/'bin/aelab-daemon').is_file()
+                assert (prefix/'bin/aelab-cli').is_file()
+                assert os.readlink(prefix/'bin/aelab') == 'aelab-cli'
                 command_env['PATH'] = str(prefix / 'bin') + os.pathsep + env['PATH']
                 if attempt == 2:
-                    command = ['aelab', 'run', '--home', str(home), '--port', str(port)]
+                    command = ['aelab', 'server', '--home', str(home), '--port', str(port)]
                 else:
                     command_env.update(AELAB_HOME=str(home), AELAB_PORT=str(port))
                     command = ['aelab-server']
@@ -77,7 +79,7 @@ def main():
                         os.write(master, (password + '\n').encode())
                         prompted = True
                     if process.poll() is not None:
-                        raise AssertionError(f'Run exited unexpectedly: {process.returncode}')
+                        raise AssertionError(f'Server launch exited unexpectedly: {process.returncode}')
                     try:
                         with urllib.request.urlopen(origin + '/health', timeout=.1) as response:
                             ready = response.status == 200
@@ -85,7 +87,7 @@ def main():
                         continue
                     if ready:
                         break
-                assert ready, 'Run did not start the server'
+                assert ready, 'CLI did not start the server'
                 assert prompted == (attempt == 0)
                 with urllib.request.urlopen(origin + '/', timeout=2) as response:
                     html = response.read().decode()
@@ -117,14 +119,14 @@ def main():
                         process.wait()
                         raise AssertionError("Foreground server did not stop with Ctrl+C")
                 os.close(master)
-        expected = [f'{ROOT}|swift|build -c release', f'{ROOT}|npm|ci --prefix Frontend', f'{ROOT}|npm|run build --prefix Frontend', f'{ROOT}|swift|build -c debug', f'{ROOT}|npm|ci --prefix Frontend', f'{ROOT}|npm|run build --prefix Frontend -- --mode development --sourcemap', f'{ROOT}|swift|build -c release', f'{ROOT}|npm|ci --prefix Frontend', f'{ROOT}|npm|run build --prefix Frontend']
+        expected = [f'{ROOT}|swift|build -c release', f'{ROOT}|npm|ci --include=dev --prefix Frontend', f'{ROOT}|npm|run build --prefix Frontend', f'{ROOT}|swift|build -c debug', f'{ROOT}|npm|run build --prefix Frontend -- --mode development --sourcemap', f'{ROOT}|swift|build -c release', f'{ROOT}|npm|run build --prefix Frontend']
         assert log.read_text().splitlines() == expected
-        result = subprocess.run([str(ROOT / '.ae'), 'run', '--port', 'invalid'], env=env,
+        result = subprocess.run([str(ROOT / '.ae'), 'server', '--port', 'invalid'], env=env,
                                 capture_output=True, text=True, timeout=3)
         assert result.returncode != 0 and log.read_text().splitlines() == expected
-        result = subprocess.run([str(ROOT / '.ae'), 'run', '--configuration', 'invalid'], env=env, capture_output=True, text=True, timeout=3)
+        result = subprocess.run([str(ROOT / '.ae'), 'server', '--configuration', 'invalid'], env=env, capture_output=True, text=True, timeout=3)
         assert result.returncode != 0 and log.read_text().splitlines() == expected
-        print('PASS: debug/release selection, run build order, first-run interactive admin, custom home/port, real dashboard/login, repeat-update preservation, installed CLI/server/assets without checkout cwd, and invalid-port rejection')
+        print('PASS: debug/release selection, server build order, first-run interactive admin, custom home/port, real dashboard/login, repeat-update preservation, installed CLI/server/daemon/assets without checkout cwd, and invalid-port rejection')
 
 
 if __name__ == '__main__':

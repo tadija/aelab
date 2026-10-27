@@ -3,6 +3,12 @@
 **
 !Package.swift
 !Package.resolved
+!VERSION
+!Plugins/
+!Plugins/BuildVersion/
+!Plugins/BuildVersion/**
+!Tools/
+!Tools/build-metadata.sh
 !Sources/
 !Sources/**
 !Tests/

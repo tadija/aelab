@@ -37,7 +37,7 @@ enum APIReference {
     </head>
     <body><main>
       <header><h1><a href="/" aria-label="aelab dashboard"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>aelab</a><span>API</span></h1><button id="theme" aria-label="Toggle theme">◐</button></header>
-      <nav aria-label="API navigation"><a href="/">Dashboard</a><a href="/api/openapi.json">OpenAPI JSON</a></nav>
+      <nav aria-label="API navigation"><a href="/">Dashboard</a><a href="/api/docs/openapi.json">OpenAPI JSON</a></nav>
       <p id="intro"></p><p id="loading" role="status">Loading API reference…</p><div id="routes"></div>
       <script>
         document.getElementById('theme').addEventListener('click',()=>{
@@ -47,7 +47,7 @@ enum APIReference {
         });
         (async()=>{
           try{
-            const response=await fetch('/api/openapi.json');const doc=await response.json();
+            const response=await fetch('/api/docs/openapi.json');const doc=await response.json();
             if(!response.ok)throw new Error(doc.error?.message||'Unable to load API reference');
             document.getElementById('intro').textContent=doc.info.description;
             const routes=document.getElementById('routes'),prefix='/api/hosts/{host}';
@@ -55,7 +55,7 @@ enum APIReference {
               const details=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div');
               details.className='route-group';summary.textContent=label;details.append(summary,body);parent.append(details);return body;
             }
-            let hostGroups;
+            let hostGroups;const sectionGroups=new Map();
             for(const [path,methods] of Object.entries(doc.paths))for(const [method,op] of Object.entries(methods)){
               let parent=routes;
               if(path.startsWith(prefix+'/')){
@@ -64,7 +64,12 @@ enum APIReference {
                   hostGroups=Object.fromEntries(['Host & discovery','Plugins','Services','Shells'].map(label=>[label,group(label,hosts)]));
                 }
                 const resource=path.slice(prefix.length+1).split('/')[0];
-                parent=hostGroups[resource==='plugins'?'Plugins':resource==='services'?'Services':['terminals','terminal-tickets','tmux'].includes(resource)?'Shells':'Host & discovery'];
+                parent=hostGroups[resource==='plugins'?'Plugins':resource==='services'?'Services':['terminals','temporary-terminals','terminal-tickets','tmux'].includes(resource)?'Shells':'Host & discovery'];
+              }
+              const section=['/api/auth','/api/config','/api/state','/api/docs'].find(prefix=>path===prefix||path.startsWith(prefix+'/'));
+              if(section){
+                if(!sectionGroups.has(section))sectionGroups.set(section,group(section,routes));
+                parent=sectionGroups.get(section);
               }
               const details=document.createElement('details'),summary=document.createElement('summary'),badge=document.createElement('span'),pre=document.createElement('pre');
               badge.className='method';badge.textContent=method.toUpperCase();summary.append(badge,document.createTextNode(path));

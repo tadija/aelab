@@ -23,26 +23,27 @@ struct TerminalWebSocket: Sendable {
                 let config = try await store.read().config
                 let host = try config.host(launch.host)
                 let terminal: LiveTerminal
-                if let id = launch.pinned { terminal = try await terminals.retained(id, host: host.id, owner: session.token) }
+                if let id = launch.pinned { terminal = try await terminals.retained(id, host: host.id, owner: session.owner, allowTemporary: true) }
                 else {
                     let (_, script, name) = try launch.resolve(config)
                     let project = host.projects.first { $0.id == launch.project }
                     let tool = config.enabledTools(host).first { $0.id == launch.tool }
                     var cwd = launch.directory ?? project?.directory ?? tool?.directory ?? ""
                     if cwd.isEmpty {
-                        let result = try await operations.execution.run(host, args: ["pwd"], timeout: 5)
+                        let result = try await operations.execution.execute(host, script: "cd -- \"$HOME\" && pwd", timeout: 5)
                         if result.status == 0 { cwd = result.output.trimmingCharacters(in: .whitespacesAndNewlines) }
                     }
                     let pty = try await operations.execution.terminal(host, script: script)
-                    terminal = LiveTerminal(pty: pty, owner: session.token, expires: session.expires, launch: launch, cwd: cwd, identity: try? await operations.identity(host))
+                    terminal = LiveTerminal(pty: pty, owner: session.owner, expires: .distantFuture, launch: launch, cwd: cwd, identity: try? await operations.identity(host), fileHost: host)
                     do { try await terminals.register(terminal) } catch { await terminal.close(); throw error }
                     live = terminal
                     try await store.audit("terminal", host: host.id, target: name ?? launch.project ?? launch.tool ?? "shell", outcome: "opened")
                 }
                 live = terminal
-                let (id, stream, replay) = try await terminal.subscribe(); subscription = id
+                let (id, stream, replay) = try await terminal.subscribe(login: session.token); subscription = id
+                _ = try await auth.authorize(token: session.token)
                 await terminal.start()
-                try await outbound.write(.text(String(decoding: JSONEncoder().encode(await terminal.metadata()), as: UTF8.self)))
+                try await outbound.write(.text(String(decoding: JSONEncoder().encode(await terminals.metadata(for: terminal)), as: UTF8.self)))
                 if !replay.isEmpty {
                     try await outbound.write(.text("{\"type\":\"replay\"}"))
                     try await outbound.write(.binary(.init(bytes: replay)))
@@ -73,12 +74,19 @@ struct TerminalWebSocket: Sendable {
                                 let control = try JSONDecoder().decode(Control.self, from: Data(string.utf8))
                                 switch control.type {
                                 case "input": try await terminal.input(Data((control.data ?? "").utf8))
+                                case "ack-program-status": await terminal.acknowledgeProgramStatus()
                                 case "resize": try await terminal.resize(cols: control.cols ?? 80, rows: control.rows ?? 24)
                                 case "signal": try await terminal.signal(control.data ?? "")
                                 case "pin", "unpin":
-                                    try await terminals.setPinned(terminal, value: control.type == "pin")
+                                    if let name = launch.session {
+                                        if control.type == "pin" {
+                                            let result = try await operations.execution.run(host, args: ["tmux", "has-session", "-t", "=" + name], timeout: 5)
+                                            guard result.status == 0 else { throw AEError("Tmux session unavailable") }
+                                        }
+                                        try await terminals.setTmuxPinned(host: host.id, session: name, owner: session.owner, expires: .distantFuture, value: control.type == "pin")
+                                    } else { try await terminals.setPinned(terminal, value: control.type == "pin") }
                                     try await store.audit("terminal-" + control.type, host: host.id, target: terminal.id, outcome: "changed")
-                                    try await outbound.write(.text(String(decoding: JSONEncoder().encode(await terminal.metadata()), as: UTF8.self)))
+                                    try await outbound.write(.text(String(decoding: JSONEncoder().encode(await terminals.metadata(for: terminal)), as: UTF8.self)))
                                 default: throw AEError("Unsupported terminal message")
                                 }
                             case .binary(let buffer): try await terminal.input(Data(buffer.readableBytesView))

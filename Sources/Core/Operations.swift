@@ -43,41 +43,44 @@ public struct TerminalLaunch: Codable, Sendable {
     public var pinned: String?
     public var directory: String?
     public var persistent: Bool?
+    public var alt: Bool? = nil
     public var yolo: Bool?
     public var window: String?
-    public init(host: String, project: String? = nil, tool: String? = nil, session: String? = nil, persistent: Bool? = nil, yolo: Bool? = nil) {
-        self.host = host; self.project = project; self.tool = tool; self.session = session; self.persistent = persistent; self.yolo = yolo
+    public init(host: String, project: String? = nil, tool: String? = nil, session: String? = nil, persistent: Bool? = nil, yolo: Bool? = nil, alt: Bool? = nil) {
+        self.host = host; self.project = project; self.tool = tool; self.session = session; self.persistent = persistent; self.yolo = yolo; self.alt = alt
     }
     public func resolve(_ config: Configuration) throws -> (Host, String, String?) {
         guard pinned == nil else { throw AEError("Pinned terminals must be reattached through the terminal registry") }
         let h = try config.host(host)
         let p: Project? = try project.map { id in guard let p = h.projects.first(where: { $0.id == id }) else { throw AEError("Unknown project on selected host") }; return p }
         let t: Tool? = try tool.flatMap { $0.isEmpty ? nil : $0 }.map { id in guard let t = config.enabledTools(h).first(where: { $0.id == id }) else { throw AEError("Unknown tool on selected host") }; return t }
+        if alt == true && t?.altArguments == nil { throw AEError("No approved ALT preset for this tool") }
         if yolo == true && t?.yoloArguments == nil { throw AEError("No approved YOLO preset for this tool") }
         if let directory { try absolutePath(directory); guard t != nil, p == nil else { throw AEError("A directory override requires an enabled standalone tool") } }
         let workingDirectory = directory ?? p?.directory ?? t?.directory
         let configuredSession = session == nil && tool == nil && persistent != false ? p?.session : nil
         let checks = (t.map { "( " + ExecutableProbe.script($0.executable) + " ) >/dev/null || { echo 'Tool executable unavailable' >&2; exit 127; }; " } ?? "") + (workingDirectory.map { "test -d \(quote($0)) && test -x \(quote($0)) || { echo 'Working directory unavailable' >&2; exit 1; }; " } ?? "")
-        let launch = t.map { command([$0.executable] + $0.arguments + (yolo == true ? ($0.yoloArguments ?? []) : [])) } ?? "exec \"${SHELL:-/bin/sh}\" -l"
+        let launch = t.map { command([$0.executable] + (alt == true ? ($0.altArguments ?? []) : $0.arguments) + (yolo == true ? ($0.yoloArguments ?? []) : [])) } ?? "exec \"${SHELL:-/bin/sh}\" -l"
         let directory = workingDirectory
         var name = session ?? configuredSession
-        if name == nil && persistent == true { name = p?.session ?? t?.session ?? "aelab-\(project ?? tool ?? "shell")-\(UUID().uuidString.prefix(8))" }
+        if name == nil && persistent == true { name = p?.session ?? "aelab-\((project ?? tool ?? "shell").replacingOccurrences(of: ".", with: "_"))-\(UUID().uuidString.prefix(8))" }
         if let name {
             try validateSession(name)
             var args = ["tmux", "attach-session", "-t", "=" + name]
+            var launchArguments = ""
             if persistent == true || configuredSession != nil {
                 args = ["tmux", "new-session", "-A", "-s", name]
-                if let directory { args += ["-c", directory] }
-                args += [h.executionScript(launch)]
+                let startDirectory = directory.map(quote) ?? "\"$HOME\""
+                launchArguments = " -c " + startDirectory + " " + quote(h.executionScript(launch))
             }
-            var script = command(args)
+            var script = command(args) + launchArguments
             if let window {
                 guard window.range(of: "^@[0-9]+$", options: .regularExpression) != nil else { throw AEError("Invalid tmux window") }
                 script = command(["tmux", "select-window", "-t", "=\(name):\(window)"]) + "; exec " + script
             } else { script = "exec " + script }
             return (h, checks + script, name)
         }
-        let script = (directory.map { "cd -- \(quote($0)) && " } ?? "") + launch
+        let script = "cd -- " + (directory.map(quote) ?? "\"$HOME\"") + " && " + launch
         return (h, checks + script, nil)
     }
 }

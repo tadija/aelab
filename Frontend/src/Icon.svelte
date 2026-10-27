@@ -1,8 +1,10 @@
 <script lang="ts">
-  let { name }: { name: 'rows' | 'grid' | 'code' | 'settings' | 'logout' | 'close' | 'reload' | 'validate' | 'save' | 'edit' | 'filter' | 'chevron' | 'wrap' | 'grip' | 'folder' | 'upload' } = $props();
+  let { name }: { name: 'arrow-up' | 'key' | 'code' | 'settings' | 'logout' | 'close' | 'reload' | 'validate' | 'save' | 'edit' | 'filter' | 'chevron' | 'wrap' | 'grip' | 'folder' | 'folder-open' | 'upload' | 'lock' } = $props();
   const paths = {
-    rows: 'M3 3h18v7H3zM3 14h18v7H3z',
-    grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+    'arrow-up': 'M12 20V4m-7 7 7-7 7 7',
+    key: 'M15 3a6 6 0 1 1-4 10L3 21H1v-4l8-8a6 6 0 0 1 6-6ZM17 7h.01',
+    lock: 'M7 10V7a5 5 0 0 1 10 0v3M5 10h14v11H5zM12 14v3',
+    'folder-open': 'M3 10V4h7l2 3h9v3M3 20l-1-10h21l-3 10H3z',
     folder: 'M3 7V4h7l2 3h9v13H3V7z',
     upload: 'M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6',
     grip: 'M8 5h.01M16 5h.01M8 12h.01M16 12h.01M8 19h.01M16 19h.01',

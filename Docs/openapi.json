@@ -2,12 +2,14 @@
   "openapi": "3.1.0",
   "info": {
     "title": "aelab API",
-    "version": "1.0.0",
-    "description": "Administrator API. Responses are direct JSON objects/arrays. Errors are {error: {code, message}}. Missing/expired login is 401; Origin and CSRF failures are 403; invalid requests are 400; stale writes are 409. Mutations require the exact Origin and session CSRF token. Configuration revisions protect writes. Native command results retain exit status. Terminal tickets are single-use; connect to /ws/terminals/{ticket} and exchange binary output and JSON input/resize/signal/pin/unpin controls. Terminal metadata reports the retained ID, pin state, initial working directory and launch context. Native pins are login-owned, memory-only and expire on logout, authentication expiry or central shutdown; replay is bounded to 256 KiB. A replay metadata frame marks the following binary history frame; suppress terminal-generated input replies while rendering it."
+    "version": "VERSION",
+    "description": "Administrator API. Responses are direct JSON objects/arrays. Errors are {error: {code, message}}. Missing/expired login is 401; Origin and CSRF failures are 403; invalid requests are 400; stale writes are 409. Mutations require the exact Origin and session CSRF token. Configuration revisions protect writes. Native command results retain exit status. Terminal tickets are single-use; connect to /ws/terminals/{ticket} and exchange binary output and JSON input/resize/signal/pin/unpin/ack-program-status controls. Terminal metadata reports the retained ID, pin state, initial working directory and launch context. Pins are administrator-owned and survive logout and login expiry. Logout disconnects that login\u2019s clients; pins clear on credential reset. Native pins are memory-only and end on central shutdown; tmux shortcuts persist across restarts; replay is bounded to 256 KiB. A replay metadata frame marks the following binary history frame; suppress terminal-generated input replies while rendering it.",
+    "x-build": "BUILD"
   },
   "paths": {
     "/api/auth/session": {
       "delete": {
+        "description": "Sign out the current login, clear its cookie and disconnect its terminal clients. Pinned shells remain available after signing in again.",
         "summary": "DELETE /api/auth/session",
         "operationId": "delete_api_auth_session",
         "responses": {
@@ -86,6 +88,7 @@
         ]
       },
       "get": {
+        "description": "Check the current login and return its CSRF token, server version and build ID.",
         "summary": "GET /api/auth/session",
         "operationId": "get_api_auth_session",
         "responses": {
@@ -98,10 +101,20 @@
                   "properties": {
                     "csrf": {
                       "type": "string"
+                    },
+                    "version": {
+                      "type": "string",
+                      "description": "Release version of the running server, embedded from VERSION."
+                    },
+                    "build": {
+                      "type": "string",
+                      "description": "Full Git commit hash embedded at build time, or unknown when unavailable."
                     }
                   },
                   "required": [
-                    "csrf"
+                    "csrf",
+                    "version",
+                    "build"
                   ]
                 }
               }
@@ -135,6 +148,7 @@
         ]
       },
       "post": {
+        "description": "Sign in with the administrator password and set a session cookie. Returns the CSRF token, server version and build ID; login attempts are rate limited.",
         "summary": "POST /api/auth/session",
         "operationId": "post_api_auth_session",
         "responses": {
@@ -147,10 +161,20 @@
                   "properties": {
                     "csrf": {
                       "type": "string"
+                    },
+                    "version": {
+                      "type": "string",
+                      "description": "Release version of the running server, embedded from VERSION."
+                    },
+                    "build": {
+                      "type": "string",
+                      "description": "Full Git commit hash embedded at build time, or unknown when unavailable."
                     }
                   },
                   "required": [
-                    "csrf"
+                    "csrf",
+                    "version",
+                    "build"
                   ]
                 }
               }
@@ -221,6 +245,7 @@
     },
     "/api/config": {
       "get": {
+        "description": "Read the configuration and its revision. Use format=source to retrieve the editable source document instead of parsed JSON.",
         "summary": "GET /api/config",
         "operationId": "get_api_config",
         "responses": {
@@ -284,6 +309,7 @@
         ]
       },
       "put": {
+        "description": "Validate and save the configuration using its current revision to prevent overwriting concurrent edits. Supports parsed JSON or format=source documents.",
         "summary": "PUT /api/config",
         "operationId": "put_api_config",
         "responses": {
@@ -402,6 +428,7 @@
     },
     "/api/config/validation": {
       "post": {
+        "description": "Check a configuration source document for syntax and validation errors without saving it.",
         "summary": "POST /api/config/validation",
         "operationId": "post_api_config_validation",
         "responses": {
@@ -500,6 +527,7 @@
     },
     "/api/docs": {
       "get": {
+        "description": "Open the authenticated, interactive API reference with expandable endpoint groups and operation details.",
         "summary": "GET /api/docs",
         "operationId": "get_api_docs",
         "responses": {
@@ -533,6 +561,7 @@
     },
     "/api/hosts/{host}/directories": {
       "get": {
+        "description": "List directories on the selected host for the directory picker. The path parameter defaults to the host home directory.",
         "summary": "GET /api/hosts/{host}/directories",
         "operationId": "get_api_hosts_host_directories",
         "responses": {
@@ -595,6 +624,7 @@
     },
     "/api/hosts/{host}/plugins": {
       "get": {
+        "description": "Host availability of central plugins, including optional editable-source metadata. Does not run plugin scripts.",
         "summary": "GET /api/hosts/{host}/plugins",
         "operationId": "get_api_hosts_host_plugins",
         "responses": {
@@ -646,12 +676,12 @@
               "type": "string"
             }
           }
-        ],
-        "description": "Host availability of central plugins, including optional editable-source metadata. Does not run plugin scripts."
+        ]
       }
     },
     "/api/hosts/{host}/plugins/{plugin}/runs": {
       "post": {
+        "description": "Run the configured enabled plugin. The request cannot supply an executable or arguments.",
         "summary": "POST /api/hosts/{host}/plugins/{plugin}/runs",
         "operationId": "post_api_hosts_host_plugins_plugin_runs",
         "responses": {
@@ -734,12 +764,12 @@
               "type": "string"
             }
           }
-        ],
-        "description": "Run the configured enabled plugin. The request cannot supply an executable or arguments."
+        ]
       }
     },
     "/api/hosts/{host}/plugins/{plugin}/source": {
       "get": {
+        "description": "Read the configured plugin script and its revision for editing.",
         "summary": "GET /api/hosts/{host}/plugins/{plugin}/source",
         "operationId": "get_api_hosts_host_plugins_plugin_source",
         "responses": {
@@ -799,6 +829,7 @@
         ]
       },
       "put": {
+        "description": "Validate and save the configured plugin script, rejecting a stale revision to protect concurrent edits.",
         "summary": "PUT /api/hosts/{host}/plugins/{plugin}/source",
         "operationId": "put_api_hosts_host_plugins_plugin_source",
         "responses": {
@@ -906,6 +937,7 @@
     },
     "/api/hosts/{host}/plugins/{plugin}/source/deployment": {
       "get": {
+        "description": "GET previews a configured local-to-SSH script copy. POST submits that exact preview, including config/source/target revisions. Refuse changed files or symlink targets; copy source only, never execute or rebuild it. No arbitrary upload paths.",
         "summary": "GET /api/hosts/{host}/plugins/{plugin}/source/deployment",
         "operationId": "get_api_hosts_host_plugins_plugin_source_deployment",
         "responses": {
@@ -971,10 +1003,10 @@
             },
             "description": "Explicit local source host ID."
           }
-        ],
-        "description": "GET previews a configured local-to-SSH script copy. POST submits that exact preview, including config/source/target revisions. Refuse changed files or symlink targets; copy source only, never execute or rebuild it. No arbitrary upload paths."
+        ]
       },
       "post": {
+        "description": "GET previews a configured local-to-SSH script copy. POST submits that exact preview, including config/source/target revisions. Refuse changed files or symlink targets; copy source only, never execute or rebuild it. No arbitrary upload paths.",
         "summary": "POST /api/hosts/{host}/plugins/{plugin}/source/deployment",
         "operationId": "post_api_hosts_host_plugins_plugin_source_deployment",
         "responses": {
@@ -1086,12 +1118,12 @@
               }
             }
           }
-        },
-        "description": "GET previews a configured local-to-SSH script copy. POST submits that exact preview, including config/source/target revisions. Refuse changed files or symlink targets; copy source only, never execute or rebuild it. No arbitrary upload paths."
+        }
       }
     },
     "/api/hosts/{host}/plugins/{plugin}/source/validation": {
       "post": {
+        "description": "Validate source syntax without saving. content and revision use the same document shape as source GET/PUT; revision is only enforced on save.",
         "summary": "POST /api/hosts/{host}/plugins/{plugin}/source/validation",
         "operationId": "post_api_hosts_host_plugins_plugin_source_validation",
         "responses": {
@@ -1193,12 +1225,12 @@
               }
             }
           }
-        },
-        "description": "Validate source syntax without saving. content and revision use the same document shape as source GET/PUT; revision is only enforced on save."
+        }
       }
     },
     "/api/hosts/{host}/projects": {
       "post": {
+        "description": "Create the supplied project directory on the selected host and verify it is accessible. Does not save the project in configuration.",
         "summary": "POST /api/hosts/{host}/projects",
         "operationId": "post_api_hosts_host_projects",
         "responses": {
@@ -1297,6 +1329,7 @@
     },
     "/api/hosts/{host}/services/{service}": {
       "get": {
+        "description": "Check the current status of a configured service using its host and provider.",
         "summary": "GET /api/hosts/{host}/services/{service}",
         "operationId": "get_api_hosts_host_services_service",
         "responses": {
@@ -1358,6 +1391,7 @@
     },
     "/api/hosts/{host}/services/{service}/actions": {
       "post": {
+        "description": "Run a supported lifecycle or inspection action on the configured service and return its result.",
         "summary": "POST /api/hosts/{host}/services/{service}/actions",
         "operationId": "post_api_hosts_host_services_service_actions",
         "responses": {
@@ -1455,6 +1489,7 @@
     },
     "/api/hosts/{host}/services/{service}/logs": {
       "get": {
+        "description": "Read logs for the configured service using its provider.",
         "summary": "GET /api/hosts/{host}/services/{service}/logs",
         "operationId": "get_api_hosts_host_services_service_logs",
         "responses": {
@@ -1516,6 +1551,7 @@
     },
     "/api/hosts/{host}/status": {
       "get": {
+        "description": "Probe host reachability, platform, projects, services and tmux sessions, returning the dashboard observation.",
         "summary": "GET /api/hosts/{host}/status",
         "operationId": "get_api_hosts_host_status",
         "responses": {
@@ -1569,6 +1605,7 @@
     },
     "/api/hosts/{host}/terminal-tickets": {
       "post": {
+        "description": "Validate a terminal launch or reconnect request and issue a single-use, login-bound ticket for the terminal WebSocket.",
         "summary": "POST /api/hosts/{host}/terminal-tickets",
         "operationId": "post_api_hosts_host_terminal_tickets",
         "responses": {
@@ -1658,6 +1695,7 @@
     },
     "/api/hosts/{host}/terminals": {
       "get": {
+        "description": "Native terminals and tmux session shortcuts pinned by the administrator. Pins survive browser logout/login. Tmux shortcuts also survive server restarts. Tmux entries have a session field and do not retain a PTY.",
         "summary": "GET /api/hosts/{host}/terminals",
         "operationId": "get_api_hosts_host_terminals",
         "responses": {
@@ -1709,12 +1747,12 @@
               "type": "string"
             }
           }
-        ],
-        "description": "Pinned native terminals owned by this login. tmux sessions are reported in host status."
+        ]
       }
     },
     "/api/hosts/{host}/terminals/{terminal}": {
       "delete": {
+        "description": "End an owned native terminal and its running programs, whether pinned or temporary.",
         "summary": "DELETE /api/hosts/{host}/terminals/{terminal}",
         "operationId": "delete_api_hosts_host_terminals_terminal",
         "responses": {
@@ -1811,6 +1849,7 @@
     },
     "/api/hosts/{host}/tmux/sessions/{session}": {
       "delete": {
+        "description": "End the named tmux session and its running programs, removing any associated pin.",
         "summary": "DELETE /api/hosts/{host}/tmux/sessions/{session}",
         "operationId": "delete_api_hosts_host_tmux_sessions_session",
         "responses": {
@@ -1896,6 +1935,7 @@
         ]
       },
       "patch": {
+        "description": "Rename the tmux session and update its associated pin. Existing links using the old name must be updated.",
         "summary": "PATCH /api/hosts/{host}/tmux/sessions/{session}",
         "operationId": "patch_api_hosts_host_tmux_sessions_session",
         "responses": {
@@ -2001,6 +2041,7 @@
     },
     "/api/hosts/{host}/tmux/sessions/{session}/windows": {
       "post": {
+        "description": "Create a window in an existing tmux session using the requested project, tool or shell launch.",
         "summary": "POST /api/hosts/{host}/tmux/sessions/{session}/windows",
         "operationId": "post_api_hosts_host_tmux_sessions_session_windows",
         "responses": {
@@ -2098,6 +2139,7 @@
     },
     "/api/hosts/{host}/tools": {
       "get": {
+        "description": "GET returns the cached host inventory; POST refreshes it. Both return the same shape. Availability checks never execute the tool.",
         "summary": "GET /api/hosts/{host}/tools",
         "operationId": "get_api_hosts_host_tools",
         "responses": {
@@ -2146,10 +2188,10 @@
               "type": "string"
             }
           }
-        ],
-        "description": "GET returns the cached host inventory; POST refreshes it. Both return the same shape. Availability checks never execute the tool."
+        ]
       },
       "post": {
+        "description": "GET returns the cached host inventory; POST refreshes it. Both return the same shape. Availability checks never execute the tool.",
         "summary": "POST /api/hosts/{host}/tools",
         "operationId": "post_api_hosts_host_tools",
         "responses": {
@@ -2224,14 +2266,14 @@
               "type": "string"
             }
           }
-        ],
-        "description": "GET returns the cached host inventory; POST refreshes it. Both return the same shape. Availability checks never execute the tool."
+        ]
       }
     },
-    "/api/openapi.json": {
+    "/api/docs/openapi.json": {
       "get": {
-        "summary": "GET /api/openapi.json",
-        "operationId": "get_api_openapi_json",
+        "description": "Download the OpenAPI contract for this server, including endpoint schemas, authentication requirements and terminal WebSocket documentation.",
+        "summary": "GET /api/docs/openapi.json",
+        "operationId": "get_api_docs_openapi_json",
         "responses": {
           "200": {
             "description": "Success",
@@ -2263,6 +2305,7 @@
     },
     "/api/state/sections": {
       "get": {
+        "description": "Read saved dashboard section expansion states for the overview and individual hosts.",
         "summary": "GET /api/state/sections",
         "operationId": "get_api_state_sections",
         "responses": {
@@ -2304,6 +2347,7 @@
         ]
       },
       "put": {
+        "description": "Save dashboard section expansion states for the specified host or overview.",
         "summary": "PUT /api/state/sections",
         "operationId": "put_api_state_sections",
         "responses": {
@@ -2409,6 +2453,7 @@
     },
     "/health": {
       "get": {
+        "description": "Return a plain-text ok response when the HTTP server is running. Requires no authentication and does not probe hosts.",
         "summary": "GET /health",
         "operationId": "get_health",
         "responses": {
@@ -2424,6 +2469,407 @@
           }
         },
         "security": []
+      }
+    },
+    "/api/auth/session/verify": {
+      "post": {
+        "description": "Checks the current administrator password with shared login rate limiting. Success does not rotate or revoke cookies, change session expiry, disconnect terminals or block any traffic. Used only to dismiss the UI privacy overlay.",
+        "summary": "Verify the administrator password without changing the session",
+        "operationId": "post_api_auth_session_verify",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "authentication_required or login_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "origin_rejected, csrf_required or password_rejected (incorrect password or rate limit)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request: validation or execution error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password": {
+      "post": {
+        "description": "Requires the current password and exact Origin. Shares login rate limiting. Invalidates all logins and pins, as with local password reset.",
+        "summary": "Change the administrator password",
+        "operationId": "post_api_auth_password",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "authentication_required or login_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "origin_rejected, csrf_required or password_rejected (incorrect password or rate limit)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request: validation or execution error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  },
+                  "replacement": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 12,
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "password",
+                  "replacement"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hosts/{host}/terminals/{terminal}/files": {
+      "post": {
+        "description": "Streams at most 20 MiB to a private spool, then transfers to the live terminal execution host over local, SSH or daemon transport. Requires current administrator ownership of that terminal, exact Origin and CSRF. Never accepts a destination path or sends file bytes into the PTY. Completed uploads persist under the host home .aelab/uploads directory across disconnects, pins, tmux and restarts; only incomplete transfers are removed automatically.",
+        "summary": "Upload a file to the terminal host",
+        "operationId": "post_api_hosts_host_terminals_terminal_files",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "Absolute path on the terminal execution host."
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 20971520
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "path",
+                    "size"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "authentication_required or login_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "origin_rejected or csrf_required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request: validation or execution error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "file_too_large: payload exceeds 20 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "upload_limit: four transfers are already active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "host",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "terminal",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "description": "File basename; path separators and control characters are rejected."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 20971520
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hosts/{host}/temporary-terminals": {
+      "get": {
+        "description": "Live unpinned, non-tmux terminals owned by the administrator. Reconnect through the terminal ID without pinning; the PTY ends after its final client disconnects.",
+        "summary": "List live temporary native terminals",
+        "operationId": "get_api_hosts_host_temporary_terminals",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PinnedSession"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "authentication_required or login_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request: validation or execution error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "host",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   },
@@ -2667,7 +3113,7 @@
           "name": {
             "type": "string"
           },
-          "directory": {
+          "dir": {
             "type": "string"
           },
           "session": {
@@ -2676,7 +3122,7 @@
         },
         "required": [
           "name",
-          "directory"
+          "dir"
         ]
       },
       "Service": {
@@ -2749,8 +3195,12 @@
               "type": "string"
             }
           },
-          "session": {
-            "type": "string"
+          "altArguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Alternative argument list used instead of arguments for an ALT launch. YOLO arguments remain additive."
           }
         },
         "required": [
@@ -2984,6 +3434,10 @@
           },
           "window": {
             "type": "string"
+          },
+          "alt": {
+            "type": "boolean",
+            "description": "Use the configured ALT argument list instead of normal tool arguments. Requires an approved ALT preset."
           }
         },
         "required": [
@@ -3159,6 +3613,13 @@
           },
           "tool": {
             "type": "string"
+          },
+          "programStatus": {
+            "$ref": "#/components/schemas/ProgramStatus"
+          },
+          "session": {
+            "type": "string",
+            "description": "Present for a pinned tmux shortcut. Attach through the tmux session URL rather than the retained terminal ID."
           }
         },
         "required": [
@@ -3253,6 +3714,10 @@
           },
           "window": {
             "type": "string"
+          },
+          "alt": {
+            "type": "boolean",
+            "description": "Use the configured ALT argument list instead of normal tool arguments. Requires an approved ALT preset."
           }
         }
       },
@@ -3289,6 +3754,10 @@
           },
           "yolo": {
             "type": "boolean"
+          },
+          "alt": {
+            "type": "boolean",
+            "description": "Use the configured ALT argument list instead of normal tool arguments. Requires an approved ALT preset."
           }
         }
       },
@@ -3306,6 +3775,50 @@
         },
         "required": [
           "action"
+        ]
+      },
+      "ProgramStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "working",
+              "done",
+              "blocked",
+              "error"
+            ]
+          },
+          "app": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "msg": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "permission",
+              "question",
+              "auth"
+            ]
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "id",
+          "state"
         ]
       }
     }

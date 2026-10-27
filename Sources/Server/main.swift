@@ -6,10 +6,14 @@ import HTTPTypes
 
 @main struct Server {
     static func main() async throws {
+        if Array(CommandLine.arguments.dropFirst()) == ["--version"] { print(AelabVersion.display); return }
+        if Array(CommandLine.arguments.dropFirst()) == ["--build"] { print(AelabVersion.build); return }
         let env = ProcessInfo.processInfo.environment
         let home = URL(fileURLWithPath: env["AELAB_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aelab").path)
         let store = try ConfigStore(home: home); _ = try await store.read()
-        let auth = Authentication(home: home); let operations = Operations(store: store); let terminals = TerminalRegistry()
+        let auth = Authentication(home: home); let operations = Operations(store: store); let terminals = try TerminalRegistry(home: home)
+        try await terminals.retainHosts(Set(try await store.read().config.hosts.map(\.id)))
+        try await terminals.reap { await auth.isCurrentOwner($0) }
         guard let port = Int(env["AELAB_PORT"] ?? "2108"), (1...65535).contains(port) else { throw AEError("Invalid AELAB_PORT") }
         let origin = env["AELAB_ORIGIN"] ?? "http://localhost:\(port)"
         guard let originURL = URL(string: origin), let scheme = originURL.scheme, ["http", "https"].contains(scheme), originURL.host != nil, originURL.path.isEmpty else { throw AEError("AELAB_ORIGIN must be an exact HTTP(S) origin without trailing slash") }
@@ -21,7 +25,8 @@ import HTTPTypes
         let router = Router()
         router.get("/health") { _, _ in Response(status: .ok, body: .init(byteBuffer: .init(string: "ok"))) }
         AuthAPI(auth: auth, terminals: terminals, origin: origin, insecure: insecure, cookiePath: base.root).register(on: router)
-        router.get("/api/openapi.json") { request, _ in
+        TerminalFilesAPI(store: store, auth: auth, origin: origin, terminals: terminals, execution: operations.execution).register(on: router)
+        router.get("/api/docs/openapi.json") { request, _ in
             do {
                 _ = try await authorize(request, auth: auth, origin: origin)
                 var headers = HTTPFields(); headers[.contentType] = "application/json"; headers[.cacheControl] = "no-store"
@@ -55,8 +60,8 @@ import HTTPTypes
         // Serve external compiled assets, with SPA routing for meaningful host/project/terminal URLs.
         let staticHandler: @Sendable (Request, BasicRequestContext) async throws -> Response = { request, _ in
             var path = request.uri.path.removingPercentEncoding ?? request.uri.path
-            guard !path.contains(".."), !path.contains("\0"), !path.hasPrefix("/api/"), !path.hasPrefix("/ws/") else { return Response(status: .notFound) }
-            if path == "/" || !path.split(separator: "/").last!.contains(".") { path = "/index.html" }
+            guard !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }), !path.contains("\0"), !path.hasPrefix("/api/"), !path.hasPrefix("/ws/") else { return Response(status: .notFound) }
+            if path == "/" || path.hasPrefix("/hosts/") || !path.split(separator: "/").last!.contains(".") { path = "/index.html" }
             guard var data = assets.data(for: path) else { return Response(status: .notFound) }
             if path == "/index.html" {
                 data = Data(String(decoding: data, as: UTF8.self).replacingOccurrences(of: "<base href=\"/\">", with: "<base href=\"" + base.root + "\">").utf8)
@@ -76,7 +81,8 @@ import HTTPTypes
         let reaper = Task {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { break }
-                await terminals.reap { (try? await auth.authorize(token: $0)) != nil }
+                do { try await terminals.reap { await auth.isCurrentOwner($0) } }
+                catch { print("Cannot update terminal state: \(error)") }
             }
         }
         defer { reaper.cancel() }

@@ -21,6 +21,13 @@ class APIDocumentTests(unittest.TestCase):
         api.validate(self.document, self.routes)
         self.assertEqual(api.render(self.document), (ROOT/'Sources/Server/APIDocument.swift').read_text())
 
+    def test_embedded_api_uses_the_release_version(self):
+        source = api.render(self.document)
+        self.assertIn('\\#(AelabVersion.current)', source)
+        self.assertEqual(self.document['info']['version'], 'VERSION')
+        self.assertIn('\\#(AelabVersion.build)', source)
+        self.assertEqual(self.document['info']['x-build'], 'BUILD')
+
     def test_missing_and_obsolete_endpoints_are_rejected(self):
         for changed in [self.routes | {('get', '/api/missing')}, self.routes - {('get', '/api/config')}]:
             with self.assertRaisesRegex(ValueError, 'route coverage'):

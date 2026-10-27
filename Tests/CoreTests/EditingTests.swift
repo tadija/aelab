@@ -54,3 +54,14 @@ import Testing
     await #expect(throws: (any Error).self) { _ = try await sources.read(host: "localhost", plugin: "probe") }
     #expect(try await sources.list(host: "localhost").isEmpty)
 }
+
+@Test func projectConfigUsesDirKey() throws {
+    let project = try JSONDecoder().decode(Project.self, from: Data(#"{"name":"app","dir":"/srv/app"}"#.utf8))
+    #expect(project.directory == "/srv/app")
+    let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(project)) as! [String: String]
+    #expect(encoded["dir"] == "/srv/app")
+    #expect(encoded["directory"] == nil)
+    #expect(throws: (any Error).self) {
+        _ = try JSONDecoder().decode(Project.self, from: Data(#"{"name":"app","directory":"/srv/app"}"#.utf8))
+    }
+}

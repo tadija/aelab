@@ -1,0 +1,74 @@
+import { chromium } from '../Frontend/node_modules/playwright/index.mjs';
+import { expect } from '../Frontend/node_modules/@playwright/test/index.mjs';
+const origin = process.env.AELAB_TEST_ORIGIN, base = '/lab/aelab';
+const browser = await chromium.launch({ headless: true, ...(process.env.AELAB_TEST_BROWSER ? { executablePath: process.env.AELAB_TEST_BROWSER } : {}) });
+try {
+ const context = await browser.newContext(), page = await context.newPage(), errors = [];
+ page.on('pageerror', e => errors.push(e.message));
+ await page.goto(origin + base + '/hosts/local/');
+ for (const width of [320, 900]) {
+   await page.setViewportSize({width,height:800});
+   const brand = await page.locator('.login-heading .brand').boundingBox();
+   const label = await page.locator('.login-tagline').boundingBox();
+   expect(Math.abs(brand.y + brand.height/2 - label.y - label.height/2)).toBeLessThan(2);
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ }
+ await page.getByLabel('Administrator password').fill(process.env.AELAB_TEST_PASSWORD);
+ await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+ const row = page.locator('.host-shells .shell-row').filter({has: page.getByRole('link', {name:'pin-work',exact:true})});
+ await expect(row).toHaveCount(1);
+ const firstOpen = page.waitForEvent('popup');
+ await row.getByRole('link',{name:'pin-work',exact:true}).click();
+ const firstTTY = await firstOpen;
+ await expect(firstTTY.locator('.terminal-status')).toHaveAttribute('data-status','connected');
+ await firstTTY.getByRole('button',{name:'Pin terminal session',exact:true}).click();
+ await expect(firstTTY.getByRole('button',{name:'Unpin terminal session',exact:true})).toBeVisible();
+ expect(firstTTY.url()).toContain('/tty/tmux/pin-work/');
+ await expect(row.getByRole('button',{name:'Pin tmux session pin-work',exact:true})).toHaveCount(0);
+ await expect(row.locator('.pin-number')).toHaveText('1');
+ await expect(page.locator('.host-shells .shell-row')).toHaveCount(1);
+ await expect(page.locator('.host-shells .pinned-row')).toHaveCount(0);
+ await expect(row.locator('.tmux-badge')).toHaveText('tmux');
+ await page.getByRole('group',{name:'Shell filter'}).getByRole('button',{name:'pinned',exact:true}).click();
+ await expect(row).toHaveCount(1);
+ await page.locator('body').click({position:{x:5,y:5}});
+ const opened = page.waitForEvent('popup'); await page.keyboard.press('1'); const tty = await opened;
+ await expect(tty.locator('.terminal-status')).toHaveAttribute('data-status','connected');
+ expect(tty.url()).toContain('/tty/tmux/pin-work/');
+ await expect(tty.getByRole('button',{name:'Unpin terminal session',exact:true})).toBeVisible();
+ await tty.close(); await firstTTY.close();
+ const login = await (await context.request.get(origin + base + '/api/auth/session')).json();
+ const denied = await context.request.post(origin + base + '/api/hosts/local/terminal-tickets',{data:{session:'pin-work'},headers:{Origin:origin}});
+ expect(denied.status()).toBe(403);
+ const headers = {Origin:origin,'X-CSRF-Token':login.csrf};
+ const pins = await (await context.request.get(origin + base + '/api/hosts/local/terminals')).json();
+ expect(pins).toHaveLength(1); expect(pins[0].session).toBe('pin-work');
+ const invalid = await context.request.post(origin + base + '/api/hosts/local/terminal-tickets',{data:{session:'invalid;name'},headers});
+ expect(invalid.status()).toBe(400);
+ // Renaming preserves the pin and shortcut rather than creating another card.
+ page.once('dialog', dialog => dialog.accept('renamed'));
+ await row.getByRole('button',{name:'Rename tmux session pin-work',exact:true}).click();
+ const renamed = page.locator('.host-shells .shell-row').filter({has:page.getByRole('link',{name:'renamed',exact:true})});
+ await expect(renamed.locator('.pin-number')).toHaveText('1');
+ await page.getByRole('group',{name:'Host picker'}).getByRole('button',{name:'all',exact:true}).click();
+ const all = page.getByRole('region',{name:'SHELLS',exact:true});
+ await expect(all.locator('.pinned-row')).toHaveCount(1);
+ await expect(all.locator('.row-title')).toHaveAttribute('href',base+'/hosts/local/tty/tmux/renamed/');
+ const allOpen = page.waitForEvent('popup'); await all.locator('.row-title').click(); const renamedTTY = await allOpen;
+ await expect(renamedTTY.locator('.terminal-status')).toHaveAttribute('data-status','connected');
+ await renamedTTY.getByRole('button',{name:'Unpin terminal session',exact:true}).click();
+ await expect(renamedTTY.getByRole('button',{name:'Pin terminal session',exact:true})).toBeVisible();
+ await expect(all.locator('.pinned-row')).toHaveCount(0);
+ await page.getByRole('group',{name:'Host picker'}).getByRole('button',{name:'Local',exact:true}).click();
+ await page.getByRole('group',{name:'Shell filter'}).getByRole('button',{name:'all',exact:true}).click();
+ await expect(renamed).toHaveCount(1); // Unpinning did not kill the session.
+ await renamedTTY.getByRole('button',{name:'Pin terminal session',exact:true}).click();
+ await expect(renamed.locator('.pin-number')).toHaveText('1');
+ page.once('dialog',dialog=>dialog.accept());
+ await renamed.getByRole('button',{name:'Delete tmux session renamed',exact:true}).click();
+ await expect(renamed).toHaveCount(0, { timeout: 20000 });
+ await expect.poll(async()=> (await (await context.request.get(origin + base + '/api/hosts/local/terminals')).json()).length).toBe(0);
+ await renamedTTY.close();
+ expect(errors).toEqual([]);
+ console.log('Tmux pins: no duplicates, shortcuts, filters, ownership, rename, unpin survival, All view and deletion passed');
+} finally { await browser.close(); }

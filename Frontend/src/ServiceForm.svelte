@@ -1,7 +1,7 @@
 <script lang="ts">
   import EntityForm from './EntityForm.svelte';
   import { untrack } from 'svelte';
-  import { nameID } from './model';
+  import { nameID, sourceName } from './model';
   import DirectoryField from './DirectoryField.svelte';
   import type { Service } from './model';
   let { existing, host, request, platform, commit, close }: { existing?: Service; host: string; platform?: string; request: <T>(path: string) => Promise<T>; commit: (item: Service) => Promise<void>; close: () => void } = $props();
@@ -11,7 +11,7 @@
   let userUnit = $state(seed?.userUnit ?? false), sudo = $state(seed?.sudo ?? false), plist = $state(seed?.plist ?? ''), logFiles = $state(seed?.logFiles?.join('\n') ?? '');
   let directory = $state(seed?.directory ?? ''), files = $state(seed?.files?.join('\n') ?? ''), environmentFile = $state(seed?.environmentFile ?? '');
 </script>
-<EntityForm kind="services" editing={!!existing} bind:name {close} submit={() => commit({ id: nameID(name), name, provider, target, ...(provider === 'systemd' ? { userUnit, sudo } : provider === 'launchd' ? { sudo, ...(plist ? { plist } : {}), ...(logFiles ? { logFiles: logFiles.split('\n').filter(Boolean) } : {}) } : {}), ...(directory ? { directory } : {}), ...(files ? { files: files.split('\n').filter(Boolean) } : {}), ...(environmentFile ? { environmentFile } : {}) })}>
+<EntityForm kind="services" editing={!!existing} suggestedName={sourceName(target)} bind:name {close} submit={() => commit({ id: nameID(name), name, provider, target, ...(provider === 'systemd' ? { userUnit, sudo } : provider === 'launchd' ? { sudo, ...(plist ? { plist } : {}), ...(logFiles ? { logFiles: logFiles.split('\n').filter(Boolean) } : {}) } : {}), ...(directory ? { directory } : {}), ...(files ? { files: files.split('\n').filter(Boolean) } : {}), ...(environmentFile ? { environmentFile } : {}) })}>
   <label>Provider<select bind:value={provider}><option>systemd</option><option>launchd</option><option>docker</option><option>compose</option></select></label>
   <label>{{ systemd: 'Systemd unit', launchd: 'Launchd service target', docker: 'Container name or ID', compose: 'Compose project name' }[provider]}<input required bind:value={target} placeholder={{ systemd: 'example.service', launchd: 'gui/502/com.example.agent or system/com.example.daemon', docker: 'web', compose: 'app' }[provider]} /></label>
   {#if provider === 'systemd'}

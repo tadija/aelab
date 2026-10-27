@@ -1,15 +1,28 @@
+import type { ProgramRecord } from './programStatus';
 import { appPath, relativePath } from './basePath';
 export type Host = { id: string; name: string; destination?: string; transport?: 'ssh' | 'local' | 'daemon'; daemon?: string; port?: number; dockerContext?: string; background?: string; tint?: string; projects: Project[]; services: Service[]; tools: string[]; plugins: string[] };
-export type Project = { id: string;  name: string; directory: string; session?: string };
+export type Project = { id: string;  name: string; dir: string; session?: string };
 export type Service = { id: string;  name: string; provider: 'systemd' | 'launchd' | 'docker' | 'compose'; target: string; directory?: string; files?: string[]; environmentFile?: string; plist?: string; logFiles?: string[]; userUnit?: boolean; sudo?: boolean };
-export type Tool = { id: string;  name: string; directory?: string; executable: string; arguments: string[]; yoloArguments?: string[]; session?: string };
+export type Tool = { id: string;  name: string; directory?: string; executable: string; arguments: string[]; altArguments?: string[]; yoloArguments?: string[]; session?: string };
 export type TTYButton = { key: string; label: string };
 export type Config = { ttyButtons: TTYButton[]; version: number; tools: Tool[]; plugins: Plugin[]; paths: string[]; hosts: Host[] };
 export type Snapshot = { config: Config; revision: string };
 export type Result = { status: number; output: string; error: string; truncated: boolean };
 export type Discovery = { provider: Service['provider']; target: string; state: string; composeProject?: string; image?: string };
 export type Observation = { projectBranches?: Record<string, string>; home?: string; hostname?: string; platform?: string; host: string;  checked: string; reachable: boolean; staleAfterSeconds: number; connection: Result; systemd?: Result; launchd?: Result; docker?: Result; tmux?: Result; discovered: Discovery[]; curated: Record<string, Result> };
-export type Launch = { directory?: string; host: string; pinned?: string;  project?: string; tool?: string; session?: string; persistent?: boolean; yolo?: boolean; window?: string };
+export type Launch = { directory?: string; host: string; pinned?: string;  project?: string; tool?: string; session?: string; persistent?: boolean; alt?: boolean; yolo?: boolean; window?: string };
+export function terminalName(launch: Pick<Launch, 'tool' | 'project' | 'session' | 'directory'>, host: Host, tools: Tool[], cwd?: string): string {
+  const project = host.projects.find(project => project.id === launch.project);
+  const tool = tools.find(tool => tool.id === launch.tool);
+  const directory = launch.directory || project?.dir || cwd || tool?.directory;
+  const source = project?.name || directory?.split('/').filter(Boolean).at(-1) || (directory === '/' ? '/' : host.name);
+  return `${tool?.name ?? launch.session ?? 'shell'}@${source}`;
+}
+
+export function terminalTabTitle(launch: Pick<Launch, 'tool' | 'project' | 'session' | 'directory'>, host: Host, tools: Tool[], cwd?: string): string {
+  return `${terminalName(launch, host, tools, cwd)}.${host.name}`;
+}
+
 export function route(path: string): { host?: string; terminal: boolean; project?: string; tool?: string; session?: string; service?: string; pinned?: string; window?: string } {
   const p = relativePath(path).split('/').filter(Boolean).map(decodeURIComponent);
   return { host: p[0] === 'hosts' ? p[1] : undefined, terminal: p[2] === 'tty' || p[2] === 'tools' || p[2] === 'projects', project: p[2] === 'projects' ? p[3] : undefined, tool: p[2] === 'tools' ? p[3] : undefined, session: p[3] === 'tmux' ? p[4] : undefined, pinned: p[3] === 'pinned' ? p[4] : undefined, service: p[2] === 'services' ? p[3] : undefined, window: p[5] };
@@ -23,7 +36,7 @@ export function terminalURL(launch: Launch): string {
   else if (launch.session) path += `tmux/${encodeURIComponent(launch.session)}/`;
   const params = new URLSearchParams();
   for (const key of ['project', 'tool', 'directory'] as const) if (launch[key] !== undefined) params.set(key, launch[key]!);
-  if (launch.persistent) params.set('persistent', '1'); if (launch.yolo) params.set('yolo', '1');
+  if (launch.persistent) params.set('persistent', '1'); if (launch.yolo) params.set('yolo', '1'); if (launch.alt) params.set('alt', '1');
   return appPath(path) + (params.size ? `?${params}` : '');
 }
 
@@ -61,7 +74,12 @@ export function statusTone(state: string): 'success' | 'warning' | 'error' | 'pe
 
 /** Names are the sole persisted identity; IDs are derived view data. */
 export function nameID(name: string): string {
-  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '');
+}
+/** Last nonempty path component, preserving dotfiles and executable suffixes. */
+export function sourceName(value: string): string { return value.trim().split('/').filter(Boolean).at(-1) ?? ''; }
+export function hostSourceName(transport: Host['transport'], destination: string, daemon: string): string {
+  return transport === 'local' ? 'localhost' : transport === 'daemon' ? daemon.trim() : destination.trim().split('@').at(-1) ?? '';
 }
 export function identify<T extends { name: string }>(item: T): T & { id: string } { return { ...item, id: nameID(item.name) }; }
 export function identifyConfig(config: Config): Config {
@@ -90,7 +108,7 @@ export type Plugin = { source?: string; id: string; name: string; executable: st
 export type PluginReport = { version: number; status: 'ok' | 'warning' | 'critical' | 'unknown'; summary: string; details: { label: string; value: string }[] };
 export type PluginObservation = { host: string; plugin: string; checked: string; exitStatus: number; report?: PluginReport; error?: string };
 
-export type PinnedSession = { number: number; id: string; host: string; cwd: string; project?: string; tool?: string };
+export type PinnedSession = { session?: string; number: number; id: string; host: string; cwd: string; project?: string; tool?: string; programStatus?: ProgramRecord };
 
 export type HostDirectory = { name: string; path: string };
 export type DirectoryListing = { host: string; path: string; home: string; parent?: string; directories: HostDirectory[]; truncated: boolean };
@@ -121,4 +139,8 @@ export function launchdState(result: Result, discovered?: string): string {
   if (discovered) return discovered;
   const state = result.output.match(/^\s*state = (.+)$/m)?.[1].trim();
   return state === 'running' ? 'running' : ['not running','waiting','exited'].includes(state ?? '') ? 'stopped' : 'unknown';
+}
+
+export function pinnedLaunch(pin: PinnedSession): Launch {
+  return pin.session ? { host: pin.host, session: pin.session } : { host: pin.host, pinned: pin.id, project: pin.project, tool: pin.tool };
 }

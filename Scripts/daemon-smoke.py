@@ -25,7 +25,7 @@ def main():
         env.pop('TMUX', None); env.pop('TMUX_PANE', None)
         (remote/'tmux').mkdir(mode=0o700)
         def cli(*args, success=True):
-            result = subprocess.run([str(BIN/'aelab'), '--home', str(central), *args], env=env, text=True, capture_output=True, timeout=40)
+            result = subprocess.run([str(BIN/'aelab-cli'), '--home', str(central), *args], env=env, text=True, capture_output=True, timeout=40)
             assert (result.returncode == 0) == success, result.stderr + result.stdout
             return result
         subprocess.run([str(BIN/'aelab-daemon'), '--home', str(daemon_home), 'init', '--endpoint', endpoint, '--bind', '127.0.0.1'], env=env, check=True, capture_output=True, timeout=40)
@@ -33,7 +33,7 @@ def main():
         assert (daemon_home/'key.pem').stat().st_mode & 0o077 == 0
         refused = subprocess.run([str(BIN/'aelab-daemon'), '--home', str(daemon_home), 'init', '--endpoint', endpoint], env=env, capture_output=True, timeout=40)
         assert refused.returncode != 0 and (daemon_home/'pairing.json').read_bytes() == original
-        log = open(root/'daemon.log', 'w'); process = subprocess.Popen([str(BIN/'aelab-daemon'), '--home', str(daemon_home), 'run'], env=env, stdout=log, stderr=log)
+        log = open(root/'daemon.log', 'w'); process = subprocess.Popen([str(BIN/'aelab-daemon'), '--home', str(daemon_home)], env=env, stdout=log, stderr=log)
         try:
             for _ in range(100):
                 try:
@@ -63,7 +63,7 @@ def main():
             host['tools'] = [f'tool-{n}' for n in range(12)]
             shutil.copy2(ROOT/'Plugins/disk-space.sh', remote/'probe.sh')
             config['plugins'] = [dict(name='Disk', executable='/bin/bash', arguments=['~/probe.sh'])]; host['plugins'] = ['disk']
-            host['projects'] = [dict(name='Work', directory=str(remote))]
+            host['projects'] = [dict(name='Work', dir=str(remote))]
             config_path.write_text(json.dumps(config))
             status = json.loads(cli('status', 'laptop').stdout); assert status['reachable'] and status['connection']['transport'] == 'daemon'
             assert 'tools' not in status

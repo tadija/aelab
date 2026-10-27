@@ -39,7 +39,8 @@ struct ConfigurationAPI: Sendable {
                     try await store.write(snapshot.config, expected: snapshot.revision)
                 }
                 let current = try await store.read().config
-                if let previous { await terminals.renameHosts(previous.renamedHosts(to: current)) }
+                if let previous { try await terminals.renameHosts(previous.renamedHosts(to: current)) }
+                try await terminals.retainHosts(Set(current.hosts.map(\.id)))
                 try await store.audit("config", host: "central", target: "aelab.json", outcome: "saved")
                 if source { return try json(await store.readDocument()) }
                 return try json(await store.read())

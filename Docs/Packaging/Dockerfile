@@ -1,22 +1,27 @@
-FROM node:24-bookworm-slim AS frontend
+FROM node:26-bookworm-slim AS frontend
 WORKDIR /src/Frontend
 COPY Frontend/package*.json ./
 RUN npm ci
 COPY Frontend/ ./
 RUN npm run build
 
-FROM swift:6.2-bookworm AS backend
+FROM swift:6.4-bookworm AS backend
 WORKDIR /src
-COPY Package.swift Package.resolved ./
+COPY Package.swift Package.resolved VERSION ./
+COPY Plugins/BuildVersion/ Plugins/BuildVersion/
+COPY Tools/build-metadata.sh Tools/build-metadata.sh
+ARG AELAB_BUILD=unknown
+RUN printf '%s\n' "$AELAB_BUILD" > BUILD
 COPY Sources/ Sources/
 COPY Tests/ Tests/
-RUN swift build -c release --product aelab-server && swift build -c release --product aelab
+RUN swift build -c release --product aelab-server && swift build -c release --product aelab-cli
 
-FROM swift:6.2-bookworm-slim
+FROM swift:6.4-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client ca-certificates && rm -rf /var/lib/apt/lists/* && useradd -m -u 10001 aelab
 WORKDIR /opt/aelab
 COPY --from=backend /src/.build/release/aelab-server /usr/local/bin/aelab-server
-COPY --from=backend /src/.build/release/aelab /usr/local/bin/aelab
+COPY --from=backend /src/.build/release/aelab-cli /usr/local/bin/aelab-cli
+RUN ln -s aelab-cli /usr/local/bin/aelab
 COPY --from=frontend /src/Frontend/dist/ /opt/aelab/public/
 COPY Docs/Config/aelab.example.json /usr/local/config/aelab.example.json
 ENV AELAB_HOME=/var/lib/aelab AELAB_PUBLIC=/opt/aelab/public AELAB_BIND=0.0.0.0 AELAB_PORT=2108

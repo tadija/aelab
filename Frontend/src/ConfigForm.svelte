@@ -13,7 +13,7 @@
     const config = structuredClone($state.snapshot(snapshot.config));
     const rows: Definition[] = kind === 'hosts' ? config.hosts : kind === 'tools' || kind === 'plugins' ? config[kind] : config.hosts.find(h => h.id === host)![kind];
     item.id = nameID(item.name);
-    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(item.id)) throw new Error('Use a name with letters or numbers and at most 64 URL characters.');
+    if ((!/^[a-z0-9.][a-z0-9.-]{0,63}$/.test(item.id) || !/[a-z0-9]/.test(item.id))) throw new Error('Use a name with letters or numbers and at most 64 URL characters.');
     if (rows.some(row => row.id === item.id && row.id !== seed?.id)) throw new Error('Another name already uses this URL. Choose a different name.');
     if (kind === 'projects') await prepareProject(item as Project);
     if (seed && (kind === 'tools' || kind === 'plugins')) renameReferences(config, kind, seed.id, item.id);

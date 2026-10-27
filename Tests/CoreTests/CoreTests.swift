@@ -42,7 +42,7 @@ import Foundation
     #expect(try String(contentsOf: home.appendingPathComponent("state/audit.log"), encoding: .utf8).contains("restart"))
 }
 @Test func hostScopedLaunchAndLiteralArguments() throws {
-    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"host-a","projects":[{"name":"p","directory":"/srv/it's a project","session":"saved"}],"services":[],"tools":["t"],"plugins":[]},{"name":"b","destination":"host-b","projects":[],"services":[],"tools":[],"plugins":[]}],"tools":[{"name":"t","executable":"codex","arguments":["$(touch /tmp/evil)"]}],"plugins":[],"paths":[]}"#.utf8)
+    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"host-a","projects":[{"name":"p","dir":"/srv/it's a project","session":"saved"}],"services":[],"tools":["t"],"plugins":[]},{"name":"b","destination":"host-b","projects":[],"services":[],"tools":[],"plugins":[]}],"tools":[{"name":"t","executable":"codex","arguments":["$(touch /tmp/evil)"]}],"plugins":[],"paths":[]}"#.utf8)
     let config = try JSONDecoder().decode(Configuration.self, from: data); try config.validate()
     let encoded = try JSONSerialization.jsonObject(with: jsonEncoder.encode(config)) as! [String: Any]
     #expect(encoded["projects"] == nil); #expect((encoded["hosts"] as? [[String: Any]])?.first?["projects"] != nil)
@@ -113,7 +113,7 @@ import Foundation
     await #expect(throws: (any Error).self) { _ = try await server.authorize(token: session.token) }
 }
 @Test func configurationRejectsCrossHostToolAndInvalidPaths() throws {
-    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"a","projects":[{"name":"p","directory":"/srv/p"}],"services":[],"tools":[],"plugins":[]},{"name":"b","destination":"b","projects":[],"services":[],"tools":["t"],"plugins":[]}],"tools":[{"name":"t","executable":"sh","arguments":[]}],"plugins":[],"paths":[]}"#.utf8)
+    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"a","projects":[{"name":"p","dir":"/srv/p"}],"services":[],"tools":[],"plugins":[]},{"name":"b","destination":"b","projects":[],"services":[],"tools":["t"],"plugins":[]}],"tools":[{"name":"t","executable":"sh","arguments":[]}],"plugins":[],"paths":[]}"#.utf8)
     let config = try JSONDecoder().decode(Configuration.self, from: data)
     #expect(throws: (any Error).self) { _ = try TerminalLaunch(host: "a", project: "p", tool: "t").resolve(config) }
     #expect(throws: (any Error).self) { try absolutePath("relative/path") }
@@ -280,7 +280,7 @@ import CPTY
 }
 
 @Test func nestedHostConfigurationScopesIdentifiersAndReferences() throws {
-    let text = #"{"version":1,"hosts":[{"name":"a","transport":"local","projects":[{"name":"app","directory":"/tmp"}],"services":[],"tools":["shell"],"plugins":[]},{"name":"b","transport":"local","projects":[],"services":[],"tools":["shell-b"],"plugins":[]}],"tools":[{"name":"shell","executable":"/bin/sh","arguments":[]},{"name":"shell-b","executable":"/bin/bash","arguments":[]}],"plugins":[],"paths":[]}"#
+    let text = #"{"version":1,"hosts":[{"name":"a","transport":"local","projects":[{"name":"app","dir":"/tmp"}],"services":[],"tools":["shell"],"plugins":[]},{"name":"b","transport":"local","projects":[],"services":[],"tools":["shell-b"],"plugins":[]}],"tools":[{"name":"shell","executable":"/bin/sh","arguments":[]},{"name":"shell-b","executable":"/bin/bash","arguments":[]}],"plugins":[],"paths":[]}"#
     var config = try ConfigStore.validateDocument(text)
     #expect(try TerminalLaunch(host: "b", tool: "shell-b").resolve(config).1.contains("/bin/bash"))
     #expect(throws: (any Error).self) { _ = try TerminalLaunch(host: "b", project: "app").resolve(config) }
@@ -334,10 +334,10 @@ import CPTY
 }
 
 @Test func namesAreTheOnlyPersistedIdentityAndCollisionsFail() throws {
-    for (name, expected) in [("Dév Server", "dev-server"), ("DEV---Server", "dev-server"), ("ＡＢＣ 123", "abc-123"), ("✨", "")] {
+    for (name, expected) in [(".aelab", ".aelab"), ("aelab", "aelab"), ("com.example.agent", "com.example.agent"), ("Dév Server", "dev-server"), ("DEV---Server", "dev-server"), ("ＡＢＣ 123", "abc-123"), ("✨", "")] {
         #expect(nameID(name) == expected)
     }
-    var config = try ConfigStore.validateDocument(#"{"version":1,"hosts":[{"name":"Dev host","transport":"local","projects":[{"name":"My project","directory":"/tmp"}],"services":[{"name":"Web service","provider":"docker","target":"web","project":"my-project","tool":"shared-tool"}],"tools":["shared-tool"],"plugins":["shared-plugin"]}],"tools":[{"name":"Shared tool","executable":"sh","arguments":[]}],"plugins":[{"name":"Shared plugin","executable":"sh","arguments":[]}]}"#)
+    var config = try ConfigStore.validateDocument(#"{"version":1,"hosts":[{"name":"Dev host","transport":"local","projects":[{"name":"My project","dir":"/tmp"}],"services":[{"name":"Web service","provider":"docker","target":"web","project":"my-project","tool":"shared-tool"}],"tools":["shared-tool"],"plugins":["shared-plugin"]}],"tools":[{"name":"Shared tool","executable":"sh","arguments":[]}],"plugins":[{"name":"Shared plugin","executable":"sh","arguments":[]}]}"#)
     #expect(config.hosts[0].id == "dev-host")
     #expect(config.hosts[0].projects[0].id == "my-project")
     #expect(config.hosts[0].services[0].id == "web-service")
@@ -381,4 +381,92 @@ import CPTY
     #expect(ambiguous.renamedHosts(to: Configuration()).isEmpty)
     var twoAdded = original.config; twoAdded.hosts = [Host(name: "One", transport: .local), Host(name: "Two", transport: .local)]
     #expect(original.config.renamedHosts(to: twoAdded).isEmpty)
+}
+
+@Test func terminalOwnerSurvivesBrowserLoginsButChangesWithCredentials() async throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    _ = try ConfigStore(home: home)
+    let auth = Authentication(home: home), anotherLogin = Authentication(home: home)
+    try await auth.bootstrap("a long test password")
+    let first = try await auth.login("a long test password")
+    await auth.logout(first.token)
+    #expect(await auth.isCurrentOwner(first.owner))
+    await #expect(throws: (any Error).self) { _ = try await auth.authorize(token: first.token) }
+    let second = try await anotherLogin.login("a long test password")
+    #expect(first.owner == second.owner); #expect(first.token != second.token)
+    try await auth.reset("a different test password")
+    #expect(!(await auth.isCurrentOwner(first.owner)))
+    await #expect(throws: (any Error).self) { _ = try await anotherLogin.authorize(token: second.token) }
+}
+
+@Test func passwordConfirmationKeepsTheExistingSessionValid() async throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    _ = try ConfigStore(home: home); let auth = Authentication(home: home)
+    try await auth.bootstrap("a long test password")
+    let before = try await auth.login("a long test password")
+    try await Task.sleep(for: .milliseconds(1050))
+    try await auth.verifySessionPassword(token: before.token, csrf: before.csrf, password: "a long test password")
+    let after = try await auth.authorize(token: before.token)
+    #expect(after.token == before.token); #expect(after.csrf == before.csrf); #expect(after.expires == before.expires)
+    try await Task.sleep(for: .milliseconds(1050))
+    await #expect(throws: (any Error).self) { try await auth.verifySessionPassword(token: before.token, csrf: before.csrf, password: "wrong password") }
+    #expect(try await auth.authorize(token: before.token).token == before.token)
+    await #expect(throws: (any Error).self) { try await auth.verifySessionPassword(token: before.token, csrf: "wrong", password: "a long test password") }
+}
+
+@Test func passwordChangeRequiresCurrentPasswordAndRevokesOldCredentials() async throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    _ = try ConfigStore(home: home); let auth = Authentication(home: home)
+    try await auth.bootstrap("a long test password")
+    let session = try await auth.login("a long test password")
+    try await Task.sleep(for: .milliseconds(1050))
+    await #expect(throws: (any Error).self) { try await auth.changePassword(current: "wrong password", replacement: "a different password") }
+    #expect(try await auth.authorize(token: session.token).token == session.token)
+    try await Task.sleep(for: .milliseconds(2100))
+    await #expect(throws: (any Error).self) { try await auth.changePassword(current: "a long test password", replacement: "short") }
+    #expect(try await auth.authorize(token: session.token).token == session.token)
+    try await Task.sleep(for: .milliseconds(1050))
+    try await auth.changePassword(current: "a long test password", replacement: "a different password")
+    await #expect(throws: (any Error).self) { _ = try await auth.authorize(token: session.token) }
+    #expect(!(await auth.isCurrentOwner(session.owner)))
+    try await Task.sleep(for: .milliseconds(1050))
+    let fresh = try await auth.login("a different password")
+    #expect(fresh.owner != session.owner)
+}
+
+@Test func dottedProjectNamesHaveDistinctValidURLs() throws {
+    let config = try ConfigStore.validateDocument(#"{"version":1,"hosts":[{"name":"local","transport":"local","projects":[{"name":"aelab","dir":"/tmp/aelab"},{"name":".aelab","dir":"/tmp/.aelab"}]}]}"#)
+    #expect(config.hosts[0].projects.map(\.id) == ["aelab", ".aelab"])
+    #expect(validID(".aelab"))
+    #expect(!validID(".")); #expect(!validID("..")); #expect(!validID("../aelab"))
+    let (_, _, session) = try TerminalLaunch(host: "local", project: ".aelab", persistent: true).resolve(config)
+    #expect(session?.hasPrefix("aelab-_aelab-") == true)
+}
+
+@Test func configurationPathsRemainReadableWithoutChangingStringValues() throws {
+    let original = #"{"version":1,"paths":["/usr/local/bin"],"tools":[{"name":"Example","executable":"/usr/bin/printf","arguments":["/srv/my project","quote \"value\"","back\\slash"]}],"hosts":[{"name":"local","transport":"local","projects":[{"name":"Example","dir":"/srv/my project"}]}]}"#
+    let config = try ConfigStore.validateDocument(original)
+    let data = try configurationData(config)
+    let text = String(decoding: data, as: UTF8.self)
+    #expect(!text.contains(#"\/"#))
+    #expect(text.contains("/usr/local/bin"))
+    #expect(text.contains("/srv/my project"))
+    let restored = try JSONDecoder().decode(Configuration.self, from: data)
+    #expect(restored.paths == config.paths)
+    #expect(restored.tools[0].arguments == config.tools[0].arguments)
+    #expect(restored.hosts[0].projects[0].directory == config.hosts[0].projects[0].directory)
+}
+
+@Test func alternateToolArgumentsReplaceNormalArgumentsAndComposeWithYolo() throws {
+    let config = try ConfigStore.validateDocument(#"{"version":1,"hosts":[{"name":"local","transport":"local","tools":["codex","plain"]}],"tools":[{"name":"codex","executable":"codex","arguments":["new"],"altArguments":["resume","space ' quote"],"yoloArguments":["--yolo"]},{"name":"plain","executable":"echo","arguments":[]}]}"#)
+    let (_, normal, _) = try TerminalLaunch(host: "local", tool: "codex").resolve(config)
+    #expect(normal.contains(command(["codex", "new"])))
+    let (_, alternate, _) = try TerminalLaunch(host: "local", tool: "codex", yolo: true, alt: true).resolve(config)
+    #expect(alternate.contains(command(["codex", "resume", "space ' quote", "--yolo"])))
+    #expect(!alternate.contains("'new'"))
+    #expect(throws: (any Error).self) { _ = try TerminalLaunch(host: "local", tool: "plain", alt: true).resolve(config) }
+    #expect(throws: (any Error).self) { _ = try TerminalLaunch(host: "local", alt: true).resolve(config) }
 }
