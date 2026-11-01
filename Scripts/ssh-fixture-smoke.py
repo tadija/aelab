@@ -90,7 +90,7 @@ LogLevel VERBOSE
             if not local_tmux: raise RuntimeError('tmux is required for terminal integration tests')
             # Prestart only the isolated local socket with our fixture config, not user bindings/hooks.
             subprocess.run([local_tmux, '-f', str(local/'.tmux.conf'), 'new-session', '-d', '-s', 'fixture-bootstrap', '/bin/sh'], env=env, check=True, timeout=10)
-            cli = ROOT/'.build/debug/aelab-cli'
+            cli = ROOT/'.build/debug/aelab'
             if os.environ.get('AELAB_TEST_DAEMON') == '1':
                 # Initialize and start through the CLI in an owned home, without any OS service.
                 daemon_port = free_port(); endpoint = f'https://localhost:{daemon_port}'
@@ -102,7 +102,7 @@ LogLevel VERBOSE
                     try:
                         probe = socket.create_connection(('127.0.0.1', daemon_port), timeout=.2); probe.close(); break
                     except OSError: time.sleep(.05)
-                paired = subprocess.run([str(cli), 'daemon', 'pair', 'fixture-2', '--file', str(daemon_home/'pairing.json')], env=env, text=True, capture_output=True, timeout=30)
+                paired = subprocess.run([str(cli), 'pair', 'fixture-2', '--file', str(daemon_home/'pairing.json')], env=env, text=True, capture_output=True, timeout=30)
                 assert paired.returncode == 0, paired.stderr
                 updated = json.loads((home/'config/aelab.json').read_text())['hosts'][1]
                 assert updated['transport'] == 'daemon' and updated['destination'] == 'endpoint-2'

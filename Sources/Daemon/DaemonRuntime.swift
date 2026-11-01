@@ -10,33 +10,22 @@ import Glibc
 import Darwin
 #endif
 
-@main struct Daemon {
-    static func main() async {
-        if Array(CommandLine.arguments.dropFirst()) == ["--version"] { print(AelabVersion.display); return }
-        if Array(CommandLine.arguments.dropFirst()) == ["--build"] { print(AelabVersion.build); return }
-        do { try await run() }
-        catch { FileHandle.standardError.write(Data("aelab-daemon: \(error)\n".utf8)); exit(1) }
-    }
-    static func run() async throws {
-        var args = Array(CommandLine.arguments.dropFirst()); var home = DaemonSetup.defaultHome
+public enum DaemonRuntime {
+    public static func run(arguments: [String]) async throws {
+        var args = arguments; var home = DaemonSetup.defaultHome
         if args.first == "--home" {
             guard args.count >= 2, !args[1].isEmpty, !args[1].hasPrefix("--") else { throw AEError("--home requires a path") }
             home = URL(fileURLWithPath: args[1]); args.removeFirst(2)
         }
         let action = args.isEmpty ? "" : args.removeFirst()
-        if ["help", "--help", "-h"].contains(action) { print("aelab-daemon [--home PATH] [init --endpoint https://HOST:1984 [--bind ADDRESS] | pairing --output FILE]"); return }
+        if ["help", "--help", "-h"].contains(action) { print("aelab daemon [--home PATH] [init --endpoint https://HOST:1984 [--bind ADDRESS]]"); return }
         if action == "init" {
             var endpoint: String?; var bind = "0.0.0.0"
             while args.count >= 2 { let flag = args.removeFirst(); let value = args.removeFirst(); if flag == "--endpoint" { endpoint = value } else if flag == "--bind" { bind = value } else { throw AEError("Unknown init option") } }
             guard args.isEmpty, let endpoint else { throw AEError("An HTTPS endpoint is required") }
             try await DaemonSetup.initialize(home: home, endpoint: endpoint, bind: bind)
-            print("Daemon initialized at \(home.path). Export pairing with: aelab-daemon --home \(home.path) pairing --output FILE")
+            print("Daemon initialized at \(home.path). Export pairing with: aelab pairing --home \(home.path) --output FILE")
             return
-        }
-        if action == "pairing" {
-            let pairing = try DaemonSetup.pairing(home: home); let data = try JSONEncoder().encode(pairing)
-            guard args.count == 2, args[0] == "--output" else { throw AEError("Use pairing --output FILE; transfer the private file securely") }
-            try DaemonSetup.privateWrite(data, to: URL(fileURLWithPath: args[1])); return
         }
         guard action.isEmpty, args.isEmpty else { throw AEError("Unknown daemon command") }
         let lock = try DaemonRunLock(home: home)

@@ -20,9 +20,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix='aelab-version-', dir='/tmp') as directory:
         root = Path(directory); home = root/'uninitialized'
         env = dict(os.environ, AELAB_HOME=str(home), AELAB_PORT='invalid', AELAB_ORIGIN='invalid', AELAB_PUBLIC=str(root/'missing-assets'))
-        for name in ['aelab-cli', 'aelab-server', 'aelab-daemon']: shutil.copy2(binaries/name, root/name)
-        (root/'aelab').symlink_to('aelab-cli')
-        for command in [[str(ROOT/'.ae')], *[[str(root/name)] for name in ['aelab', 'aelab-cli', 'aelab-server', 'aelab-daemon']]]:
+        shutil.copy2(binaries/'aelab', root/'aelab')
+        for command in [[str(ROOT/'.ae')], *[[str(root/name)] for name in ['aelab']]]:
             for flag, expected in [('--version', f'{version} ({revision[:7]})'), ('--build', revision)]:
                 result = subprocess.run([*command, flag], cwd=root, env=env, text=True, capture_output=True, timeout=10)
                 assert result.returncode == 0 and result.stdout == expected+'\n', result.stderr+result.stdout

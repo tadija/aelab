@@ -75,8 +75,8 @@ finally:
 ''')
         env = dict(os.environ, HOME=str(homes['daemon']), SHELL='/bin/sh')
         daemon_home = root/'daemon-state'; daemon_port = free_port()
-        subprocess.run([str(ROOT/'.build/debug/aelab-daemon'), '--home', str(daemon_home), 'init', '--endpoint', f'https://localhost:{daemon_port}', '--bind', '127.0.0.1'], env=env, check=True, capture_output=True, timeout=30)
-        start([str(ROOT/'.build/debug/aelab-daemon'), '--home', str(daemon_home)], env, 'daemon')
+        subprocess.run([str(ROOT/'.build/debug/aelab'), '__run-daemon', '--home', str(daemon_home), 'init', '--endpoint', f'https://localhost:{daemon_port}', '--bind', '127.0.0.1'], env=env, check=True, capture_output=True, timeout=30)
+        start([str(ROOT/'.build/debug/aelab'), '__run-daemon', '--home', str(daemon_home)], env, 'daemon')
         pairing = json.loads((daemon_home/'pairing.json').read_text())
         for _ in range(100):
             try: wire = Wire(pairing); break
@@ -100,7 +100,7 @@ finally:
         (central/'config/aelab.json').write_text(json.dumps(config)); password = create_admin(central)
         port = free_port(); origin = f'http://localhost:{port}'
         env = dict(os.environ, AELAB_HOME=str(central), HOME=str(homes['local']), SHELL='/bin/sh', TMPDIR=str(root/'spool'), AELAB_PORT=str(port), AELAB_ORIGIN=origin, AELAB_BASE_PATH='/lab/aelab', AELAB_PUBLIC=str(ROOT/'Frontend/dist'), AELAB_SSH_CONFIG=str(root/'ssh_config'))
-        start([str(ROOT/'.build/debug/aelab-server')], env, 'server')
+        start([str(ROOT/'.build/debug/aelab'), '__run-server'], env, 'server')
         for _ in range(150):
             try: urllib.request.urlopen(origin+'/lab/aelab/health', timeout=.2).close(); break
             except OSError: time.sleep(.1)

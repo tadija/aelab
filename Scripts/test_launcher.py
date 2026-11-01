@@ -30,7 +30,7 @@ class RepositoryLauncherTests(unittest.TestCase):
         (self.repo/'Frontend/package-lock.json').write_text('{"lockfileVersion":3}')
         (self.repo/'Frontend/src/example.ts').write_text('export const example = 1;')
         for configuration in ['debug', 'release']:
-            binary = self.repo/f'.build/{configuration}/aelab-cli'
+            binary = self.repo/f'.build/{configuration}/aelab'
             binary.parent.mkdir(parents=True)
             binary.write_text('#!/usr/bin/env python3\nimport json,os,sys\nprint(json.dumps(dict(args=sys.argv[1:],cwd=os.getcwd())))\n')
             binary.chmod(0o755)
@@ -52,7 +52,7 @@ class RepositoryLauncherTests(unittest.TestCase):
             result = self.launch(role, '--service', '--configuration', 'debug', '--home', 'private home')
             self.assertEqual(result, dict(args=[role, '--service', '--home', 'private home'], cwd=str(self.root)))
         lines = self.log.read_text().splitlines()
-        self.assertEqual(lines[-2:], ['swift|build -c debug --product aelab-cli', 'swift|build -c debug --product aelab-daemon'])
+        self.assertEqual(lines[-1:], ['swift|build -c debug --product aelab'])
         self.assertEqual(sum(line.startswith('npm|') for line in lines), 2)
         result = self.launch('--home', 'relative home', 'server', '--port', '1234', '--service')
         self.assertEqual(result['args'], ['server', '--home', 'relative home', '--port', '1234', '--service'])
@@ -82,7 +82,7 @@ class RepositoryLauncherTests(unittest.TestCase):
         self.assertEqual(result['args'], ['install', '--source', str(self.repo), '--prefix', 'local prefix'])
         self.assertEqual(self.commands()[len(before):], ['swift|package clean', 'swift|build -c release', 'npm|ci --include=dev --prefix Frontend', 'npm|run build --prefix Frontend'])
         before = self.commands(); self.launch('daemon', '--clean', '--service')
-        self.assertEqual(self.commands()[len(before):], ['swift|package clean', 'swift|build -c release --product aelab-cli', 'swift|build -c release --product aelab-daemon'])
+        self.assertEqual(self.commands()[len(before):], ['swift|package clean', 'swift|build -c release --product aelab'])
 
     def test_cache_tracks_mode_environment_and_missing_tools(self):
         self.launch('server', '--configuration', 'debug')
@@ -131,10 +131,10 @@ class RepositoryLauncherTests(unittest.TestCase):
         self.assertFalse(self.log.exists())
 
     def test_pairing_delegates_to_the_cli_and_install_starts_nothing_itself(self):
-        result = self.launch('daemon', 'pairing', '--home', 'private home', '--output', 'pairing.json')
-        self.assertEqual(result['args'], ['daemon', 'pairing', '--home', 'private home', '--output', 'pairing.json'])
-        result = self.launch('daemon', 'pair', 'host', '--file', 'pairing.json')
-        self.assertEqual(result['args'], ['daemon', 'pair', 'host', '--file', 'pairing.json'])
+        result = self.launch('pairing', '--home', 'private home', '--output', 'pairing.json')
+        self.assertEqual(result['args'], ['pairing', '--home', 'private home', '--output', 'pairing.json'])
+        result = self.launch('pair', 'host', '--file', 'pairing.json')
+        self.assertEqual(result['args'], ['pair', 'host', '--file', 'pairing.json'])
         result = self.launch('install', '--prefix', 'local prefix')
         self.assertEqual(result['args'], ['install', '--source', str(self.repo), '--prefix', 'local prefix'])
 

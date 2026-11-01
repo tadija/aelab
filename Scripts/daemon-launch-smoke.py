@@ -18,7 +18,7 @@ def main():
         root = Path(temporary); repo = root/'checkout'; (repo/'Scripts').mkdir(parents=True)
         build = repo/'.build/release'; build.mkdir(parents=True)
         shutil.copy2(ROOT/'.ae', repo/'.ae')
-        for name in ['aelab-cli', 'aelab-server', 'aelab-daemon']:
+        for name in ['aelab']:
             shutil.copy2(BIN/name, build/name)
         (repo/'Scripts/generate-api.py').write_text('# Fixture has no HTTP API.\n')
         (repo/'Tools').mkdir()
@@ -63,17 +63,17 @@ def main():
                 for file, content in preserved.items(): assert file.read_bytes() == content
                 assert not central.exists()
                 if attempt == 0:
-                    cli('daemon', 'pairing', '--home', str(home), '--output', 'pairing-export.json')
+                    cli('pairing', '--output', 'pairing-export.json', '--home', str(home))
                     assert json.loads((root/'pairing-export.json').read_text()) == pairing
                     assert (root/'pairing-export.json').stat().st_mode & 0o077 == 0
-                    assert all(line in ['swift|build -c release --product aelab-cli', 'swift|build -c release --product aelab-daemon'] for line in (root/'build.log').read_text().splitlines())
+                    assert all(line in ['swift|build -c release --product aelab'] for line in (root/'build.log').read_text().splitlines())
             finally:
                 stop_process(process, timeout=12); log.close()
             if attempt == 0:
                 cli('daemon', '--home', str(home), '--endpoint', 'https://different.invalid:1984', success=False)
                 cli('daemon', '--home', str(home), '--bind', '0.0.0.0', success=False)
                 cli('install', '--prefix', str(prefix))
-                for name in ['aelab', 'aelab-cli', 'aelab-server', 'aelab-daemon']: assert (prefix/'bin'/name).is_file()
+                assert sorted(p.name for p in (prefix/'bin').iterdir()) == ['aelab']
                 for file, content in preserved.items(): assert file.read_bytes() == content
                 try: wire = Wire(pairing, hostname='aelab-fixture.invalid'); wire.close()
                 except OSError: pass

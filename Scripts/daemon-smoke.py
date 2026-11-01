@@ -25,15 +25,15 @@ def main():
         env.pop('TMUX', None); env.pop('TMUX_PANE', None)
         (remote/'tmux').mkdir(mode=0o700)
         def cli(*args, success=True):
-            result = subprocess.run([str(BIN/'aelab-cli'), '--home', str(central), *args], env=env, text=True, capture_output=True, timeout=40)
+            result = subprocess.run([str(BIN/'aelab'), '--home', str(central), *args], env=env, text=True, capture_output=True, timeout=40)
             assert (result.returncode == 0) == success, result.stderr + result.stdout
             return result
-        subprocess.run([str(BIN/'aelab-daemon'), '--home', str(daemon_home), 'init', '--endpoint', endpoint, '--bind', '127.0.0.1'], env=env, check=True, capture_output=True, timeout=40)
+        subprocess.run([str(BIN/'aelab'), '__run-daemon', '--home', str(daemon_home), 'init', '--endpoint', endpoint, '--bind', '127.0.0.1'], env=env, check=True, capture_output=True, timeout=40)
         original = (daemon_home/'pairing.json').read_bytes(); pairing = json.loads(original)
         assert (daemon_home/'key.pem').stat().st_mode & 0o077 == 0
-        refused = subprocess.run([str(BIN/'aelab-daemon'), '--home', str(daemon_home), 'init', '--endpoint', endpoint], env=env, capture_output=True, timeout=40)
+        refused = subprocess.run([str(BIN/'aelab'), '__run-daemon', '--home', str(daemon_home), 'init', '--endpoint', endpoint], env=env, capture_output=True, timeout=40)
         assert refused.returncode != 0 and (daemon_home/'pairing.json').read_bytes() == original
-        log = open(root/'daemon.log', 'w'); process = subprocess.Popen([str(BIN/'aelab-daemon'), '--home', str(daemon_home)], env=env, stdout=log, stderr=log)
+        log = open(root/'daemon.log', 'w'); process = subprocess.Popen([str(BIN/'aelab'), '__run-daemon', '--home', str(daemon_home)], env=env, stdout=log, stderr=log)
         try:
             for _ in range(100):
                 try:
@@ -46,14 +46,14 @@ def main():
             for kwargs in [dict(token='0'*64), dict(origin='https://untrusted.example')]:
                 wire = Wire(pairing, **kwargs); assert not wire.accepted; wire.close()
             cli('init')
-            cli('daemon', 'pair', 'Laptop', '--file', str(daemon_home/'pairing.json'))
+            cli('pair', 'Laptop', '--file', str(daemon_home/'pairing.json'))
             # The Swift client itself must reject an untrusted certificate, not just Python's TLS stack.
             other_home = root/'other-daemon'
-            subprocess.run([str(BIN/'aelab-daemon'), '--home', str(other_home), 'init', '--endpoint', endpoint], env=env, check=True, capture_output=True, timeout=40)
+            subprocess.run([str(BIN/'aelab'), '__run-daemon', '--home', str(other_home), 'init', '--endpoint', endpoint], env=env, check=True, capture_output=True, timeout=40)
             wrong_certificate = dict(pairing, certificate=json.loads((other_home/'pairing.json').read_text())['certificate'])
             bad_pairing = root/'untrusted-pairing.json'; bad_pairing.write_text(json.dumps(wrong_certificate)); bad_pairing.chmod(0o600)
             original_config = (central/'config/aelab.json').read_bytes()
-            refused_pairing = cli('daemon', 'pair', 'Untrusted', '--file', str(bad_pairing), success=False)
+            refused_pairing = cli('pair', 'Untrusted', '--file', str(bad_pairing), success=False)
             assert 'Daemon connection failed' in refused_pairing.stderr and pairing['token'] not in refused_pairing.stderr
             assert (central/'config/aelab.json').read_bytes() == original_config
             config_path = central/'config/aelab.json'; config = json.loads(config_path.read_text()); host = next(h for h in config['hosts'] if h['name'] == 'Laptop')
@@ -96,7 +96,7 @@ def main():
             # Exercise the existing authenticated dashboard against this daemon.
             server_port = free_port(); origin = f'http://localhost:{server_port}'; password = create_admin(central)
             server_env = dict(env, AELAB_PORT=str(server_port), AELAB_ORIGIN=origin, AELAB_PUBLIC=str(ROOT/'Frontend/dist'))
-            server_log = open(root/'server.log', 'w'); server = subprocess.Popen([str(BIN/'aelab-server')], env=server_env, stdout=server_log, stderr=server_log)
+            server_log = open(root/'server.log', 'w'); server = subprocess.Popen([str(BIN/'aelab'), '__run-server'], env=server_env, stdout=server_log, stderr=server_log)
             try:
                 for _ in range(100):
                     try:

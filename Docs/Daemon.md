@@ -34,22 +34,22 @@ export PATH="$HOME/.local/bin:$PATH"
 aelab daemon --endpoint https://HOST:1984 --service
 ```
 
-Installation copies `aelab-cli`, `aelab-server`, `aelab-daemon` and the dashboard; it starts nothing and leaves runtime credentials untouched. `--prefix PATH` changes the install destination. Installed daemon operation needs neither the checkout nor build tools; Linux still needs Swift runtime libraries. Omit `--service` to run in the foreground.
+Installation copies the unified `aelab` executable and the dashboard; it starts nothing and leaves runtime credentials untouched. `--prefix PATH` changes the install destination. Installed daemon operation needs neither the checkout nor build tools; Linux still needs Swift runtime libraries. Omit `--service` to run in the foreground.
 
 ## Pair
 
 From the checkout on the daemon host:
 
 ```sh
-./.ae daemon pairing --output pairing.json
+./.ae pairing --output pairing.json
 # Installed alternative:
-# aelab daemon pairing --output pairing.json
+# aelab pairing --output pairing.json
 ```
 
-For a custom daemon directory: `aelab daemon pairing --home PATH --output pairing.json`. Transfer this private file securely to the central machine, then run:
+For a custom daemon directory: `aelab pairing --home PATH --output pairing.json`. Transfer this private file securely to the central machine, then run:
 
 ```sh
-aelab daemon pair laptop --file pairing.json
+aelab pair laptop --file pairing.json
 ```
 
 For an existing host, use its URL ID. Pairing verifies TLS before selecting daemon execution; it cannot replace the explicit local host. Delete the exported file after importing it. Central credentials stay in private `state/daemons/UUID.json` files, outside configuration and browser responses.
@@ -74,11 +74,11 @@ Linux logs: `journalctl --user -u aelab-daemon.service`. macOS logs: `~/.aelab/d
 ## Manual binary setup
 
 ```sh
-swift build -c release --product aelab-daemon
-.build/release/aelab-daemon init --endpoint https://HOST:1984
-.build/release/aelab-daemon
+swift build -c release --product aelab
+.build/release/aelab daemon init --endpoint https://HOST:1984
+.build/release/aelab daemon
 ```
 
-The raw binary starts directly after initialization. Use `aelab daemon` for CLI-managed setup and launch. You can copy a matching binary yourself; OpenSSL is needed only for initialization. Manual service examples are in [Packaging](Packaging).
+These commands use the same CLI-managed setup and launch as the installed `aelab daemon` command. You can copy a matching binary yourself; OpenSSL is needed only for initialization. Manual service examples are in [Packaging](Packaging).
 
 TLS verifies the pinned certificate and endpoint hostname; private tokens authenticate clients. Browser Origins and unsupported protocol messages are rejected, requests/output are bounded, and disconnects cancel commands and close native PTYs. The daemon is a trusted execution endpoint, not a sandbox. Certificates last one year; renewal/revocation currently requires a fresh private home and re-pairing. Outbound connections and persistent tasks remain follow-ups.

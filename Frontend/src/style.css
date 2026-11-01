@@ -1774,16 +1774,37 @@ li[data-reorder-id] {
 .directory-toolbar .directory-hidden-toggle { margin-left: auto; }
 
 .alt-launch {
+  position: relative;
   color: color-mix(in srgb, var(--accent) 70%, var(--text));
   background: color-mix(in srgb, var(--accent) 30%, var(--panel));
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
+/* Keep titles sized identically while Alt only changes their decoration. */
+.managed-content > a.row-title { justify-self: start; }
 .row-title.alt-launch {
-  display: inline-block;
-  justify-self: start;
+  isolation: isolate;
+  background: transparent;
+}
+.row-title.alt-launch::before {
+  content: '';
+  position: absolute;
+  inset: -7px -11px;
+  z-index: -1;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   border-radius: 8px;
-  padding: 6px 10px;
-  margin: -7px -11px;
+  background: color-mix(in srgb, var(--accent) 30%, var(--panel));
 }
-.alt-label { margin-left: 6px; font-size: .65rem; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 1px 3px; vertical-align: middle; white-space: nowrap; }
+.alt-label {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  font-size: .65rem;
+  line-height: 1.2;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 3px;
+  background: var(--panel);
+  white-space: nowrap;
+}
+.row-title > .alt-label { top: -13px; right: -14px; }

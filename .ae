@@ -14,17 +14,17 @@ if [ "${1:-}" = "--home" ] && { [ "${3:-}" = server ] || [ "${3:-}" = daemon ]; 
   set -- "$operation" --home "$launch_home" "$@"
 fi
 case "${1:-}" in
+  pair|pairing)
+    (cd "$root" && swift build -c release --product aelab)
+    exec "$root/.build/release/aelab" "$@"
+    ;;
   server|daemon|install)
     build_configuration=release
     clean=false
     operation=$1
     shift
-    if [ "$operation" = daemon ] && { [ "${1:-}" = pair ] || [ "${1:-}" = pairing ]; }; then
-      (cd "$root" && swift build -c release --product aelab-cli)
-      exec "$root/.build/release/aelab-cli" daemon "$@"
-    fi
     if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
-      printf '%s\n' 'Use ./.ae server [--configuration debug|release] [--home PATH] [--port PORT] [--service] [--clean]' '    ./.ae daemon [--configuration debug|release] [--home PATH] [--endpoint https://HOST:1984] [--bind ADDRESS] [--service] [--clean]' '    ./.ae install [--prefix PATH] [--clean]' 'Install copies all executables and the dashboard; it starts nothing.'
+      printf '%s\n' 'Use ./.ae server [--configuration debug|release] [--home PATH] [--port PORT] [--service] [--clean]' '    ./.ae daemon [--configuration debug|release] [--home PATH] [--endpoint https://HOST:1984] [--bind ADDRESS] [--service] [--clean]' '    ./.ae install [--prefix PATH] [--clean]' 'Install copies the executable and dashboard; it starts nothing.'
       exit 0
     fi
     validate_options() {
@@ -52,7 +52,7 @@ case "${1:-}" in
     if [ "$clean" = true ]; then (cd "$root" && swift package clean); fi
     if [ "$operation" = daemon ]; then
       # No dashboard or Node needed on a daemon-only host.
-      (cd "$root" && swift build -c "$build_configuration" --product aelab-cli && swift build -c "$build_configuration" --product aelab-daemon)
+      (cd "$root" && swift build -c "$build_configuration" --product aelab)
     else
       (cd "$root" && python3 Scripts/generate-api.py && swift build -c "$build_configuration" && if [ "$clean" = true ]; then python3 Tools/build-frontend.py --configuration "$build_configuration" --clean; else python3 Tools/build-frontend.py --configuration "$build_configuration"; fi)
     fi
@@ -66,15 +66,15 @@ case "${1:-}" in
       value=$1; shift; remaining=$((remaining - 1))
       if [ "$flag" != --configuration ]; then set -- "$@" "$flag" "$value"; fi
     done
-    if [ "$operation" = install ]; then exec "$root/.build/release/aelab-cli" install --source "$root" "$@"; fi
-    exec "$root/.build/$build_configuration/aelab-cli" "$operation" "$@"
+    if [ "$operation" = install ]; then exec "$root/.build/release/aelab" install --source "$root" "$@"; fi
+    exec "$root/.build/$build_configuration/aelab" "$operation" "$@"
     ;;
 
 esac
 
 for configuration in release debug; do
-  binary="$root/.build/$configuration/aelab-cli"
+  binary="$root/.build/$configuration/aelab"
   if [ -x "$binary" ]; then exec "$binary" "$@"; fi
 done
-printf '%s\n' 'Build first: swift build --product aelab-cli; or start with ./.ae server / ./.ae daemon' >&2
+printf '%s\n' 'Build first: swift build --product aelab; or start with ./.ae server / ./.ae daemon' >&2
 exit 1

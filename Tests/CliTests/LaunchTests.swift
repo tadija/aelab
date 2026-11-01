@@ -16,6 +16,6 @@ import Core
     #expect(throws: (any Error).self) { try LaunchOptions(kind: .daemon, arguments: ["--port", "1234"], home: nil, environment: env) }
 }
 @Test func installedLaunchesFollowTheCurrentRelease() {
-    #expect(LaunchCommand.binary("aelab-server", cli: URL(fileURLWithPath: "/prefix/share/aelab/releases/uuid/bin/aelab-cli")).path == "/prefix/share/aelab/current/bin/aelab-server")
-    #expect(LaunchCommand.binary("aelab-daemon", cli: URL(fileURLWithPath: "/repo/.build/debug/aelab-cli")).path == "/repo/.build/debug/aelab-daemon")
+    #expect(LaunchCommand.binary("aelab", cli: URL(fileURLWithPath: "/prefix/share/aelab/releases/uuid/bin/aelab")).path == "/prefix/share/aelab/current/bin/aelab")
+    #expect(LaunchCommand.binary("aelab", cli: URL(fileURLWithPath: "/repo/.build/debug/aelab")).path == "/repo/.build/debug/aelab")
 }

@@ -3,10 +3,10 @@ import Foundation
 
 enum DaemonCommands {
     static func run(_ args: [String], store: ConfigStore) async throws {
-        guard args.count == 4, args[0] == "pair", args[2] == "--file" else { throw AEError("Use daemon pair HOST --file FILE") }
-        let data = try Data(contentsOf: URL(fileURLWithPath: args[3]))
+        guard args.count == 3, args[1] == "--file" else { throw AEError("Use pair HOST --file FILE") }
+        let data = try Data(contentsOf: URL(fileURLWithPath: args[2]))
         guard data.count <= 32768 else { throw AEError("Pairing file exceeds 32 KiB") }
-        try await pair(JSONDecoder().decode(DaemonPairing.self, from: data), host: args[1], store: store)
+        try await pair(JSONDecoder().decode(DaemonPairing.self, from: data), host: args[0], store: store)
     }
     static func pair(_ pairing: DaemonPairing, host name: String, store: ConfigStore) async throws {
         try pairing.validate()
@@ -27,6 +27,6 @@ enum DaemonCommands {
         else { var host = Host(name: name, transport: .daemon); host.daemon = id; config.hosts.append(host) }
         try await store.write(config, expected: snapshot.revision); saved = true
         try await store.audit("daemon-pair", host: index.map { config.hosts[$0].id } ?? nameID(name), target: id, outcome: "paired", initiator: "local-cli")
-        print("Daemon paired: \(name). Direct TLS execution is active; connection ID \(id).")
+        print("Daemon paired: \(name).")
     }
 }

@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 
 from fixtures import ROOT, free_port, create_admin, stop_process
-binary = ROOT / '.build/debug/aelab-server'
+binary = ROOT / '.build/debug/aelab'
 
 def main():
     with tempfile.TemporaryDirectory(prefix='aelab-smoke-') as folder:
@@ -38,7 +38,7 @@ def main():
         public = home/'public'; shutil.copytree(ROOT/'Frontend/dist', public)
         env = dict(os.environ, AELAB_HOME=folder, AELAB_PORT=str(port), AELAB_ORIGIN=origin, AELAB_PUBLIC=str(public))
         logfile = open(home / 'server.log', 'w')
-        server = subprocess.Popen([str(binary)], env=env, stdout=logfile, stderr=logfile)
+        server = subprocess.Popen([str(binary), "__run-server"], env=env, stdout=logfile, stderr=logfile)
         cookie = ''
         def request(path, method='GET', payload=None, csrf=None, request_origin=origin, use_cookie=True):
             headers = {'Origin': request_origin}

@@ -54,10 +54,10 @@ enum LaunchCommand {
     }
     static func start(_ options: LaunchOptions) async throws {
         let env = ProcessInfo.processInfo.environment
-        let executable = binary("aelab-" + options.kind.rawValue)
+        let executable = binary("aelab")
         guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw AEError("Executable missing; use ./.ae \(options.kind.rawValue) or ./.ae install") }
         var environment = ["PATH": env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "HOME": env["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path]
-        var arguments: [String] = []
+        var arguments: [String] = ["__run-server"]
         if options.kind == .server {
             let installedAssets = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("public")
             let defaultAssets = FileManager.default.fileExists(atPath: installedAssets.appendingPathComponent("index.html").path) ? installedAssets.path : RuntimePaths.publicDirectory
@@ -87,7 +87,7 @@ enum LaunchCommand {
                 }
                 if let bind = options.bind, bind != settings.bind { throw AEError("Bind differs from existing daemon settings; credentials were preserved") }
             }
-            arguments = ["--home", options.home.path]
+            arguments = ["__run-daemon", "--home", options.home.path]
             print("Starting aelab daemon at \(try DaemonSetup.settings(home: options.home).endpoint)\(options.service ? " as a user service" : " (Ctrl+C to stop)")")
         }
         fflush(nil)

@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='aelab-base-', dir='/tmp') as folder:
     env = dict(os.environ, AELAB_HOME=folder, AELAB_PORT=str(port), AELAB_ORIGIN=origin, AELAB_BASE_PATH='/lab/aelab/', AELAB_PUBLIC=str(ROOT/'Frontend/dist'), AELAB_TEST_ORIGIN=origin, AELAB_TEST_PASSWORD=password)
     env = browser_environment(env)
     log = open(home/'server.log', 'w')
-    binary = ROOT/'.build'/os.environ.get('AELAB_TEST_CONFIGURATION', 'debug')/'aelab-cli'
+    binary = ROOT/'.build'/os.environ.get('AELAB_TEST_CONFIGURATION', 'debug')/'aelab'
     server = subprocess.Popen([str(binary), 'server'], env=env, stdout=log, stderr=log)
     try:
         for _ in range(100):

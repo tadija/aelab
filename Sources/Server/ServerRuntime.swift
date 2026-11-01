@@ -4,8 +4,8 @@ import Hummingbird
 import HummingbirdWebSocket
 import HTTPTypes
 
-@main struct Server {
-    static func main() async throws {
+public enum ServerRuntime {
+    public static func run() async throws {
         if Array(CommandLine.arguments.dropFirst()) == ["--version"] { print(AelabVersion.display); return }
         if Array(CommandLine.arguments.dropFirst()) == ["--build"] { print(AelabVersion.build); return }
         let env = ProcessInfo.processInfo.environment

@@ -29,6 +29,7 @@ try {
   await input.pressSequentially('printf "DAEMON_BROWSER_OK\\n"'); await input.press('Enter');
   await expect(terminal.locator('.xterm-rows > div').filter({ hasText: /^DAEMON_BROWSER_OK\s*$/ }).last()).toBeVisible();
   await expect(terminal.locator('.xterm-rows')).not.toContainText('not a terminal');
+  await terminal.getByRole('button', { name: 'Pin terminal session', exact: true }).click();
   await expect(terminal.getByRole('button', { name: 'Unpin terminal session', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
   await expect(page.getByRole('region', { name: 'SHELLS', exact: true })).toContainText(/pinned/i);

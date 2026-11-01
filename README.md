@@ -1,8 +1,8 @@
 # aelab
 
-A self-hosted dashboard and CLI for your personal lab. Manage local, SSH and optional daemon hosts from one central instance. SSH hosts need no aelab installation.
+A self-hosted web interface and CLI for your personal lab. Manage hosts, projects, services and browser terminals across local, SSH and optional daemon connections from one central instance. SSH hosts need no aelab installation.
 
-Built with Swift/Hummingbird, Svelte 5 and xterm.js. The CLI works independently of the dashboard.
+A single [Swift](https://www.swift.org/) executable provides the CLI, [Hummingbird](https://hummingbird.codes) server and optional host daemon, with a web interface built using [Svelte](https://svelte.dev), [TypeScript](https://www.typescriptlang.org) and [xterm.js](https://xtermjs.org). The CLI works independently of the web interface and launches the server or daemon in the foreground or as a background service.
 
 ## Features
 
@@ -13,7 +13,12 @@ Built with Swift/Hummingbird, Svelte 5 and xterm.js. The CLI works independently
 - Configuration forms and a validated file editor; host directory picker and script editing/deployment.
 - Admin login, SSH keys/agent authentication, strict host verification, paired TLS daemons and audit records.
 
-## Screenshots
+## UI
+
+<details>
+  <summary>watch the video</summary>
+  <video src="https://github.com/user-attachments/assets/b16ed74d-02a5-4e45-8e5a-23d031b1b5df" controls width="100%"></video>
+</details>
 
 <table>
   <tr>
@@ -30,10 +35,6 @@ Built with Swift/Hummingbird, Svelte 5 and xterm.js. The CLI works independently
   </tr>
 </table>
 
-## Video
-
-https://github.com/user-attachments/assets/b16ed74d-02a5-4e45-8e5a-23d031b1b5df
-
 ## Build and run
 
 Bring Swift, Node, Python and Git. Runs on macOS and Linux. SSH hosts need SSH access; persistent sessions need tmux on the selected host.
@@ -48,7 +49,7 @@ cd aelab
 
 First start builds everything, adds localhost and asks you to set an admin password. Open <http://localhost:2108> and sign in. Your lab starts here: add a host, a project, or open a shell with **+**.
 
-Stop with Ctrl+C. Configuration and credentials live in `~/.aelab` (`$AELAB_HOME`), outside the checkout. Run `./.ae server` again to rebuild and start with your setup intact. Release is the default; `--configuration debug` adds debug builds and frontend sourcemaps. Use `--home PATH` and `--port PORT` to make yourself at home.
+Stop with Ctrl+C. Run `./.ae server` again to rebuild and start with your setup intact. Release is the default; `--configuration debug` adds debug builds and frontend sourcemaps. Use `--home PATH` and `--port PORT` to make yourself at home.
 
 ### Install once, launch from anywhere
 
@@ -58,9 +59,9 @@ export PATH="$HOME/.local/bin:$PATH"
 aelab server
 ```
 
-`install` copies **all three executables** (`aelab-cli`, `aelab-server`, `aelab-daemon`) and deploys the frontend. It starts nothing. Add the PATH line to your shell configuration to keep it. Files go to `~/.local/bin` and  `~/.local/share/aelab`; `--prefix PATH` uses `PATH/bin` and `PATH/share/aelab` instead.
+`install` copies the `aelab` executable and dashboard. It starts nothing. Add the PATH line to your shell configuration to keep it.
 
-Repeat runs reuse Swift's incremental build cache, installed frontend dependencies and unchanged frontend output. Dependency manifests/toolchain changes reinstall npm packages; frontend source, mode or environment changes rebuild the dashboard. Identical installations reuse the current release.
+Repeat runs reuse Swift's incremental build cache, installed frontend dependencies and unchanged frontend output. Dependency manifests/toolchain changes reinstall npm packages; frontend source, mode or environment changes rebuild the dashboard. Identical installations reuse the current release. Installations prune obsolete releases, keeping current, one fallback and releases with open files (including running services). Run `aelab cleanup` to clean an existing installation; add `--prefix PATH` for a custom prefix. Cleanup conservatively skips removal when `lsof` is unavailable.
 
 For a fresh rebuild, use `./.ae install --clean` (also available on `server` and `daemon`). It clears Swift build products and forces frontend dependency installation/build where applicable; configuration, credentials and installed runtime files stay intact.
 
@@ -70,7 +71,7 @@ Installed aelab needs no checkout or build tools; Linux still needs the Swift ru
 
 ```sh
 aelab server --service
-# Or, directly from the checkout:
+# or, directly from the checkout:
 ./.ae server --service
 ```
 
@@ -83,7 +84,7 @@ The two launch commands work the same way from `.ae` and the installed CLI:
 | Dashboard server | `aelab server` | `aelab server --service` |
 | Optional host daemon | `aelab daemon --endpoint https://HOST:1984` | `aelab daemon --endpoint https://HOST:1984 --service` |
 
-Daemon setup needs OpenSSL; its first start requires `--endpoint`. Later starts reuse its credentials in `~/.aelab/daemon`. `./.ae daemon` builds only native executables, so daemon-only hosts need no Node. See [pairing and daemon hosts](Docs/Daemon.md).
+Daemon setup needs OpenSSL; its first start requires `--endpoint`. Later starts reuse its saved credentials. `./.ae daemon` builds only native executables, so daemon-only hosts need no Node. See [pairing and daemon hosts](Docs/Daemon.md).
 
 ### Keep it fresh
 
@@ -111,18 +112,30 @@ python3 Scripts/generate-api.py
 swift build -c release
 npm ci --prefix Frontend
 npm run build --prefix Frontend
-export AELAB_HOME="$HOME/.aelab"
-.build/release/aelab-cli server
+.build/release/aelab server
 ```
 
 Hosting under `/aelab/`? Set `AELAB_BASE_PATH=/aelab`; see [URL prefixes](Docs/Installation.md#url-prefix).
+
+### Where files live
+
+Runtime data stays outside the checkout and survives rebuilds and reinstalls.
+
+| Purpose | Default root | Override / notes |
+| --- | --- | --- |
+| Command | `~/.local/bin/aelab` | Add its directory to your shell's PATH; `install --prefix PATH` uses `PATH/bin/aelab` |
+| Installed releases and dashboard | `~/.local/share/aelab` | Absolute `$XDG_DATA_HOME` uses `$XDG_DATA_HOME/aelab`; `--prefix PATH` uses `PATH/share/aelab` |
+| Runtime data | `~/.aelab` | Configuration, credentials, state, daemon data, terminal uploads, deployed plugins and service logs. `$AELAB_HOME` or `--home PATH` changes the runtime home |
 
 ## CLI
 
 ```sh
 aelab hosts
 aelab status dev
+aelab tmux dev
 aelab tty dev --project aelab
+aelab service status dev web
+aelab help tty
 ```
 
 Browser terminals display [program status](Docs/ProgramStatus.md) from tools that emit OSC 7501, including progress and requests for input.

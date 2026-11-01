@@ -4,7 +4,7 @@
 
 `./.ae server` builds and starts aelab at <http://localhost:2108>, using `~/.aelab` by default. First run adds localhost and asks for an administrator password. Options: `--configuration debug|release`, `--home PATH`, `--port PORT`. Stop with Ctrl+C before pulling updates and running again. Existing configuration and credentials are preserved. Manual build commands are in [README](../README.md).
 
-`./.ae install` installs `aelab-cli`, `aelab-server`, `aelab-daemon` and the dashboard, plus an `aelab` symlink to `aelab-cli`. Both macOS and Linux use `~/.local/bin` and `$XDG_DATA_HOME/aelab`, defaulting to `~/.local/share/aelab`. Only absolute XDG paths are honored. `--prefix PATH` overrides these with `PATH/bin` and `PATH/share/aelab`. Add the command directory to PATH, then use `aelab server`. Installed operation needs no checkout or build tools; updates require rebuilding and reinstalling. Installation always uses release builds and never edits shell files, enables services or elevates privileges.
+`./.ae install` installs one `aelab` executable and the dashboard. Both macOS and Linux use `~/.local/bin` and `$XDG_DATA_HOME/aelab`, defaulting to `~/.local/share/aelab`. Only absolute XDG paths are honored. `--prefix PATH` overrides these with `PATH/bin` and `PATH/share/aelab`. Add the command directory to PATH, then use `aelab server`. Installed operation needs no checkout or build tools; updates require rebuilding and reinstalling. Installation always uses release builds and never edits shell files, enables services or elevates privileges.
 
 Builds are incremental by default. Frontend dependency and output caches live under `Frontend/node_modules/.cache/aelab`; unchanged assets are checked before reuse, and matching installations keep their active release. Changing dependency inputs or the Node/npm toolchain reinstalls dependencies; changing frontend inputs, build mode or Vite environment rebuilds assets. Generated API source keeps its timestamp when unchanged so Swift can reuse its build cache.
 
@@ -111,7 +111,7 @@ Use `~/` for portable per-user paths. Absolute local script paths resolve on SSH
 
 ## Version
 
-`aelab --version`, `aelab-server --version` and `aelab-daemon --version` print the release and a short commit ID, such as `0.2.0 (abc123d)`. Use `--build` for the full commit hash. Both flags also work with `./.ae` without building. The dashboard footer shows the server's release and build; hover for the full hash.
+`aelab --version` prints the release and a short commit ID, such as `0.2.0 (abc123d)`. Use `--build` for the full commit hash. Both flags also work with `./.ae` without building. The dashboard footer shows the server's release and build; hover for the full hash.
 
 To prepare a release, edit root `VERSION`, rebuild/install, and tag it as `vX.Y.Z`. Builds embed VERSION and the checkout's Git HEAD, including direct `swift build` builds. Installed programs never need Git or the checkout. Configuration-schema and daemon-protocol versions are separate.
 
@@ -123,7 +123,7 @@ docker build --build-arg AELAB_BUILD="$(git rev-parse HEAD)" -f Docs/Packaging/D
 
 ## Security and packaging
 
-Keep runtime files private. Passwords use salted PBKDF2 hashing; `aelab admin reset` revokes sessions. Mutations require exact Origin and CSRF checks. Terminal tickets are owner-bound and single-use; audit excludes secrets and terminal contents.
+Keep runtime files private. Passwords use salted PBKDF2 hashing; `aelab reset` revokes sessions. Mutations require exact Origin and CSRF checks. Terminal tickets are owner-bound and single-use; audit excludes secrets and terminal contents.
 
 Environment options: `AELAB_HOME`, `AELAB_PORT`, `AELAB_BIND`, `AELAB_ORIGIN`, `AELAB_PUBLIC` and optional `AELAB_SSH_CONFIG`. The default bind is 127.0.0.1. Use an exact HTTPS origin behind a reverse proxy for remote browser access.
 

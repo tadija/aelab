@@ -50,16 +50,15 @@ def main():
                 prefix = root / 'installed application'
                 if attempt == 2:
                     subprocess.run([str(ROOT / '.ae'), 'install', '--prefix', str(prefix)],
-                                   cwd=root, env=env, check=True, capture_output=True, text=True, timeout=15)
-                assert (prefix/'bin/aelab-daemon').is_file()
-                assert (prefix/'bin/aelab-cli').is_file()
-                assert os.readlink(prefix/'bin/aelab') == 'aelab-cli'
+                                   cwd=root, env=env, check=True, capture_output=True, text=True, timeout=90)
+                assert sorted(p.name for p in (prefix/'bin').iterdir()) == ['aelab']
+                assert sorted(p.name for p in (prefix/'share/aelab/current/bin').iterdir()) == ['aelab']
                 command_env['PATH'] = str(prefix / 'bin') + os.pathsep + env['PATH']
                 if attempt == 2:
                     command = ['aelab', 'server', '--home', str(home), '--port', str(port)]
                 else:
                     command_env.update(AELAB_HOME=str(home), AELAB_PORT=str(port))
-                    command = ['aelab-server']
+                    command = ['aelab', 'server']
             process = subprocess.Popen(command,
                                        cwd=root, env=command_env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
             os.close(slave)

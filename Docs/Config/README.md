@@ -6,6 +6,6 @@ Schema `version: 1` defines shared `tools`, `plugins`, `paths` and `ttyButtons`.
 
 Shared `paths` prepend literal absolute directories to PATH on every host. Tool discovery checks executable availability without running candidates. Project directories override tool working directories. Plugin scripts may use `~/` for each host user’s home; see [Plugins](../../Plugins/README.md) for paths, deployment and the probe contract.
 
-Hosts select `local`, `ssh` or `daemon` explicitly. Daemon pairing adds a `daemon` connection UUID; private endpoint/certificate/token material stays in `state/daemons`, outside the main file. Use `aelab daemon pair` as described in [Daemon hosts](../Daemon.md).
+Hosts select `local`, `ssh` or `daemon` explicitly. Daemon pairing adds a `daemon` connection UUID; private endpoint/certificate/token material stays in `state/daemons`, outside the main file. Use `aelab pair` as described in [Daemon hosts](../Daemon.md).
 
 Keep keys, passwords and environment secrets out of configuration and version control. See [Installation](../Installation.md) for runtime settings.

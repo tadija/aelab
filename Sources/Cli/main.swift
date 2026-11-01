@@ -1,4 +1,6 @@
 import Core
+import Server
+import Daemon
 import Foundation
 #if os(Linux)
 import Glibc
@@ -14,11 +16,34 @@ import Darwin
         var args = Array(CommandLine.arguments.dropFirst())
         if args == ["--version"] { print(AelabVersion.display); return }
         if args == ["--build"] { print(AelabVersion.build); return }
+        if args.first == "__run-server" {
+            try await ServerRuntime.run(); return
+        }
+        if args.first == "__run-daemon" {
+            args.removeFirst()
+            try await DaemonRuntime.run(arguments: args); return
+        }
         var explicitHome: String?
         var homePath = ProcessInfo.processInfo.environment["AELAB_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".aelab").path
         if args.first == "--home" { guard args.count > 2 else { throw AEError("--home requires path and command") }; homePath = args[1]; explicitHome = homePath; args.removeFirst(2) }
         guard let action = args.first else { usage(); return }; args.removeFirst()
-        if ["help", "--help", "-h"].contains(action) { usage(); return }
+        if ["help", "--help", "-h"].contains(action) {
+            guard args.count <= 1 else { throw AEError("Use aelab help [COMMAND]") }
+            print(try CommandHelp.text(for: args.first)); return
+        }
+        if args.contains("--help") || args.contains("-h") {
+            print(try CommandHelp.text(for: action)); return
+        }
+        guard CommandHelp.details[action] != nil else { throw AEError("Unknown command: \(action). See aelab help.") }
+        if action == "cleanup" {
+            var prefix: URL?
+            if !args.isEmpty {
+                guard args.count == 2, args[0] == "--prefix" else { throw AEError("Use cleanup [--prefix PATH]") }
+                prefix = URL(fileURLWithPath: args[1])
+            }
+            print("Removed \(try Installation.location(prefix: prefix).cleanup()) obsolete releases; current, previous and active releases are retained.")
+            return
+        }
         if action == "install" {
             var source: URL?; var prefix: URL?
             while !args.isEmpty {
@@ -33,26 +58,32 @@ import Darwin
             guard let source else { throw AEError("Use ./.ae install, or install --source REPOSITORY [--prefix PATH]") }
             let location = Installation.location(prefix: prefix)
             if try !location.install(source: source) { print("Installation unchanged; reusing the current release.") }
-            print("Installed CLI: \(location.bin.appendingPathComponent("aelab-cli").path)")
             print("CLI command: \(location.bin.appendingPathComponent("aelab").path)")
-            print("Installed daemon: \(location.bin.appendingPathComponent("aelab-daemon").path)")
-            print("Installed server: \(location.bin.appendingPathComponent("aelab-server").path)")
             print("Dashboard assets: \(location.application.appendingPathComponent("current/public").path)")
-            print("Add \(location.bin.path) to PATH if needed; then use aelab help, aelab server or aelab daemon. The checkout is only needed for source updates.")
             return
         }
-        if action == "server" || (action == "daemon" && args.first != "pair" && args.first != "pairing") {
-            if args == ["--help"] || args == ["-h"] { usage(); return }
+        if action == "daemon", args.first == "init" {
+            args.removeFirst()
+            try await DaemonRuntime.run(arguments: (explicitHome.map { ["--home", $0] } ?? []) + ["init"] + args); return
+        }
+        if action == "server" || action == "daemon" {
             try await LaunchCommand.start(LaunchOptions(kind: action == "server" ? .server : .daemon, arguments: args, home: explicitHome))
             return
         }
-        if action == "daemon", args.first == "pairing" {
-            args.removeFirst()
+        if action == "pairing" {
             var daemonHome = explicitHome.map { URL(fileURLWithPath: $0) } ?? DaemonSetup.defaultHome
-            if args.first == "--home", args.count >= 2 { daemonHome = URL(fileURLWithPath: args[1]); args.removeFirst(2) }
-            guard args.count == 2, args[0] == "--output" else { throw AEError("Use daemon pairing [--home PATH] --output FILE") }
+            var output: String?; var seen: Set<String> = []
+            while !args.isEmpty {
+                guard args.count >= 2, ["--home", "--output"].contains(args[0]),
+                      !args[1].isEmpty, !args[1].hasPrefix("--"), seen.insert(args[0]).inserted else {
+                    throw AEError("Use pairing [--home PATH] --output FILE")
+                }
+                let flag = args.removeFirst(); let value = args.removeFirst()
+                if flag == "--home" { daemonHome = URL(fileURLWithPath: value) } else { output = value }
+            }
+            guard let output else { throw AEError("Use pairing [--home PATH] --output FILE") }
             let pairing = try DaemonSetup.pairing(home: daemonHome)
-            try DaemonSetup.privateWrite(JSONEncoder().encode(pairing), to: URL(fileURLWithPath: args[1])); return
+            try DaemonSetup.privateWrite(JSONEncoder().encode(pairing), to: URL(fileURLWithPath: output)); return
         }
         let home = URL(fileURLWithPath: homePath); let store = try ConfigStore(home: home); let ops = Operations(store: store, initiator: "local-cli")
         func require(_ count: Int) throws { guard args.count >= count else { throw AEError("Missing arguments; see aelab help") } }
@@ -61,11 +92,11 @@ import Darwin
         case "init":
             if args == ["--if-needed"] { try await store.initializeIfNeeded(template: RuntimePaths.initialConfiguration()) }
             else { guard args.isEmpty else { throw AEError("Use init [--if-needed]") }; try await store.initialize(template: RuntimePaths.initialConfiguration()) }
-            print("Configuration ready at \(homePath)/config/aelab.json; execution transport is explicitly configured; use aelab admin bootstrap if needed")
-        case "admin":
-            try require(1); guard ["bootstrap", "reset"].contains(args[0]) else { throw AEError("Use admin bootstrap or reset") }
+            print("Configuration ready at \(homePath)/config/aelab.json")
+        case "bootstrap", "reset":
+            guard args.isEmpty else { throw AEError("Use aelab \(action)") }
             let entered = try password(); let auth = Authentication(home: home)
-            if args[0] == "bootstrap" { try await auth.bootstrap(entered) } else { try await auth.reset(entered) }
+            if action == "bootstrap" { try await auth.bootstrap(entered) } else { try await auth.reset(entered) }
             print("Administrator password saved")
         case "config":
             try require(1)
@@ -80,7 +111,7 @@ import Darwin
                 try await store.audit("config", host: "central", target: "aelab.json", outcome: "saved", initiator: "local-cli"); print("Configuration saved")
             default: throw AEError("Use config show|validate|apply FILE")
             }
-        case "daemon":
+        case "pair":
             try await DaemonCommands.run(args, store: store)
         case "plugins":
             try require(1); let config = try await store.read().config; try printJSON(config.enabledPlugins(config.host(args[0])))
@@ -89,21 +120,19 @@ import Darwin
             let observation = try await ops.probePlugin(host: args[0], plugin: args[1]); try printJSON(observation)
             if observation.error != nil { exit(1) }
         case "hosts": try printJSON(await store.read().config.hosts)
-        case "ssh-candidates":
-            let path = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh/config")
-            let lines = try String(contentsOf: path, encoding: .utf8).split(separator: "\n")
-            for line in lines { let fields = line.split(whereSeparator: { $0.isWhitespace }); if fields.first?.lowercased() == "host" { for alias in fields.dropFirst() where !alias.contains("*") && !alias.contains("?") && !alias.hasPrefix("!") { print(alias) } } }
-            print("Candidates only; approve destinations in config before use. Include files may contain additional aliases.")
         case "tools":
             try require(1); try printJSON(await ops.discoverTools(args[0]))
-        case "status", "services", "sessions":
+        case "status", "services", "tmux":
             try require(1); let observation = try await ops.observe(args[0])
-            if action == "sessions" { try printJSON(observation.tmux) }
+            if action == "tmux" { try printJSON(observation.tmux) }
             else if action == "services" { try printJSON(observation.discovered) }
             else { try printJSON(observation) }
             if !observation.reachable { exit(1) }
-        case "start", "stop", "restart", "logs", "service-status":
-            try require(2); let result = try await ops.service(args[0], id: args[1], operation: action == "service-status" ? "status" : action)
+        case "service":
+            guard args.count == 3, ["status", "logs", "start", "stop", "restart"].contains(args[0]) else {
+                throw AEError("Use service status|logs|start|stop|restart HOST ID")
+            }
+            let result = try await ops.service(args[1], id: args[2], operation: args[0])
             print(result.output); if !result.error.isEmpty { FileHandle.standardError.write(Data(result.error.utf8)) }; if result.status != 0 { exit(1) }
         case "tty":
             try require(1); var launch = TerminalLaunch(host: args[0]); var i = 1
@@ -147,30 +176,5 @@ import Darwin
         guard isatty(STDIN_FILENO) == 1, let pointer = getpass("Administrator password (12+ characters): ") else { throw AEError("Password entry requires an interactive terminal") }
         return String(cString: pointer)
     }
-    static func usage() {
-        print("""
-        aelab --version | --build | [--home PATH] COMMAND
-          server [--home PATH] [--port PORT] [--service]
-          daemon [--home PATH] [--endpoint https://HOST:1984] [--bind ADDRESS] [--service]
-                                       run in the foreground, or install/start a user service
-          daemon pairing [--home PATH] --output FILE
-          install --source REPOSITORY [--prefix PATH]   copy all executables/assets; start nothing
-          init [--if-needed]            initialize with localhost (never replaces existing entries)
-          admin bootstrap|reset        local administrator credentials/recovery
-          config show|validate|apply FILE
-          hosts | ssh-candidates       approved hosts / unapproved SSH aliases
-          status|services|sessions|tools HOST
-          service-status|logs HOST SERVICE
-          start|stop|restart HOST SERVICE   explicit remote mutation
-          plugins HOST | probe HOST PLUGIN
-          Names determine URL IDs (for example, Dev Server → dev-server).
-          tty HOST [--project ID] [--tool ID] [--session NAME] [--persistent] [--yolo] [--alt]
-          daemon pair HOST --file PAIRING.json
-          doctor                       configuration and read-only host diagnostics
-        Repository build/start/update: ./.ae server [--configuration debug|release] [--home PATH] [--port PORT] [--service] [--clean]
-        Install release binaries and assets: ./.ae install [--prefix PATH] [--clean]
-        Build/start only the host daemon: ./.ae daemon [--endpoint https://HOST:1984] [--service] [--clean]
-        Uses shared core and explicit local/SSH/daemon execution; no running dashboard required.
-        """)
-    }
+    static func usage() { print(CommandHelp.overview) }
 }

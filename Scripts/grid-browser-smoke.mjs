@@ -18,7 +18,7 @@ try {
   const snapshot = await (await context.request.get(origin + base + '/api/config')).json();
   const directory = snapshot.config.hosts[0].projects[0].dir;
   const names = ['Codex', 'Claude', 'Pi', 'opencode-with-a-very-long-name-for-grid-layout'];
-  snapshot.config.tools = names.map(name => ({ name, executable: '/bin/sh', arguments: [], yoloArguments: ['-i'] }));
+  snapshot.config.tools = names.map((name, index) => ({ name, executable: '/bin/sh', arguments: [], yoloArguments: ['-i'], ...([0, 3].includes(index) ? { altArguments: ['--alternate'] } : {}) }));
   snapshot.config.plugins = ['One', 'Two', 'Three', 'Four plugin with a longer title'].map(name => ({ name, executable: '/bin/true', arguments: [] }));
   snapshot.config.hosts[0].projects = ['Work', 'Work Two', 'Work Three', 'Work Four'].map(name => ({ name, dir: directory + '/a-long-project-path-that-should-wrap-without-overflowing-the-card' }));
   snapshot.config.hosts[0].services = ['One', 'Two', 'Three', 'Four'].map(name => ({ name, provider: 'systemd', target: name.toLowerCase() + '.service' }));
@@ -32,9 +32,50 @@ try {
     host: 'local', checked: new Date().toISOString(), staleAfterSeconds: 300,
     tools: snapshot.config.tools.map(tool => ({ tool: { ...tool, id: tool.name.toLowerCase() }, enabled: true, state: 'installed', path: tool.name === 'Codex' ? resolvedToolPath : '/bin/sh' })),
   } }));
+  await page.route('**/api/hosts/*/plugins', route => route.fulfill({ json: snapshot.config.plugins.map(plugin => ({
+    plugin: plugin.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), state: 'installed',
+  })) }));
   await page.reload();
+  // Installed badges appear only while their discovery filter is active.
+  for (const theme of ['dark', 'light']) {
+    if (await page.locator('html').getAttribute('data-theme') !== theme) await page.getByRole('button', { name: 'Toggle theme' }).click();
+    for (const kind of ['tools', 'plugins']) {
+      const section = page.getByRole('region', { name: kind.toUpperCase(), exact: true });
+      const badge = section.locator('.managed-status .badge').filter({ hasText: /^installed$/i }).first();
+      const filter = section.getByRole('button', { name: `Discovery ${kind}`, exact: true });
+      await expect(badge).toHaveCount(0);
+      await filter.click();
+      await expect(filter).toHaveAttribute('aria-pressed', 'true');
+      await expect(badge).toHaveAttribute('data-tone', 'success');
+      await filter.click();
+      await expect(badge).toHaveCount(0);
+    }
+  }
+  await page.getByRole('button', { name: 'Toggle theme' }).click();
   await expect(page.getByRole('button', { name: 'Compact layout', exact: true })).toHaveCount(0);
   const projectList = page.getByRole('region', { name: 'PROJECTS', exact: true }).locator('ul');
+  // Alt decoration must not resize supported cards, their neighbors or other sections.
+  const cardBoxes = () => page.locator('.project-row, .managed-row').evaluateAll(rows => rows.map(row => {
+    const { x, y, width, height } = row.getBoundingClientRect(); return { x, y, width, height };
+  }));
+  for (const width of [900, 520, 1340]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const before = await cardBoxes();
+    await page.keyboard.down('Alt');
+    await expect(page.locator('.alt-label').first()).toBeVisible();
+    const after = await cardBoxes();
+    expect(after).toHaveLength(before.length);
+    for (let index = 0; index < before.length; index++) {
+      for (const dimension of ['x', 'y', 'width', 'height']) expect(after[index][dimension]).toBeCloseTo(before[index][dimension], 1);
+    }
+    if (width === 900) {
+      await page.getByRole('region', { name: 'TOOLS', exact: true }).screenshot({ path: '/tmp/aelab-alt-tools.png' });
+      await page.getByRole('region', { name: 'PROJECTS', exact: true }).screenshot({ path: '/tmp/aelab-alt-projects.png' });
+    }
+    await page.keyboard.up('Alt');
+    await expect(page.locator('.alt-label')).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 900, height: 1000 });
   await expect(page.locator('.dashboard')).toHaveCSS('padding-left', '36px');
   await expect(page.locator('.dashboard')).toHaveCSS('padding-right', '36px');
   const measure = list => list.locator(':scope > li').evaluateAll(rows => rows.map(row => { const { x, y, width } = row.getBoundingClientRect(); return { x, y, width, overflow: row.scrollWidth > row.clientWidth + 1 }; }));
@@ -84,11 +125,13 @@ try {
     expect(badge.y).toBeGreaterThan(title.y + title.height);
     expect(badge.x).toBeGreaterThan(title.x);
   }
+  for (const kind of ['tools', 'plugins']) await page.getByRole('button', { name: `Discovery ${kind}`, exact: true }).click();
   for (const row of await page.locator('.managed-row').all()) {
     const badge = await row.locator('.managed-status .badge').boundingBox(), grip = await row.locator('.reorder-control summary').boundingBox();
     expect(Math.abs(badge.y + badge.height / 2 - grip.y - grip.height / 2)).toBeLessThan(2);
     expect(badge.x + badge.width).toBeLessThanOrEqual(grip.x);
   }
+  for (const kind of ['tools', 'plugins']) await page.getByRole('button', { name: `Discovery ${kind}`, exact: true }).click();
   const filters = page.getByRole('group', { name: 'Shell filter', exact: true });
   await expect(filters.getByRole('button', { name: 'all', exact: true })).toHaveText('all');
   await expect(page.getByLabel('Shell count', { exact: true })).toHaveText('4');

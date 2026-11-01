@@ -783,7 +783,7 @@ try {
           try { await fetch(`${origin}/health`, { signal: AbortSignal.timeout(100) }); await new Promise(r => setTimeout(r, 50)); }
           catch { break; }
         }
-        replacementServer = spawn(process.env.AELAB_TEST_SERVER_BINARY, [], { env: process.env, stdio: 'ignore' });
+        replacementServer = spawn(process.env.AELAB_TEST_SERVER_BINARY, ['__run-server'], { env: process.env, stdio: 'ignore' });
         for (let i = 0; i < 100; i++) {
           try { const health = await fetch(`${origin}/health`); if (health.ok) break; } catch {}
           await new Promise(r => setTimeout(r, 50));
