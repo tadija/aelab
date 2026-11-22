@@ -12,7 +12,6 @@
   import MatrixRainScreen from './matrix-rain/MatrixRainScreen.svelte';
   import Reorder from './Reorder.svelte';
   import DirectoryPicker from './DirectoryPicker.svelte';
-  import PluginDeployment from './PluginDeployment.svelte';
   import { moveRow, sortable } from './rowOrder';
   import Terminal from './Terminal.svelte';
   import ConfigForm from './ConfigForm.svelte';
@@ -21,9 +20,8 @@
   import PinnedSessionCard from './PinnedSessionCard.svelte';
   import ProjectsSection from './ProjectsSection.svelte';
   import StatusBadge from './StatusBadge.svelte';
-  import PluginEditor from './PluginEditor.svelte';
   import ConfigEditor from './ConfigEditor.svelte';
-  import { route, terminalURL, pinnedLaunch, nameID, identify, definitionPayload, hostLocation, launchdState, serviceDiscoveryMessage, pluginHasSource, discoveryMatchesStatus, discoveryMatchesSearch, validTint, type PluginAvailability, type PinnedSession, type Plugin, type PluginObservation, type ToolInventory, type Host, type Project, type Service, type Tool, type Snapshot, type Config, type Observation, type Result, type Launch, type Discovery } from './model';
+  import { route, terminalURL, pinnedLaunch, nameID, identify, definitionPayload, hostLocation, launchdState, serviceDiscoveryMessage, discoveryMatchesStatus, discoveryMatchesSearch, validTint, type PinnedSession, type ToolInventory, type Host, type Project, type Service, type Tool, type Snapshot, type Config, type Observation, type Result, type Launch, type Discovery } from './model';
   const initialLock = storedLock();
   let matrixActive = $state(!!initialLock), matrixFontSize = $state(initialLock?.fontSize ?? 20);
   let lockAppearance = $state<LockAppearance>(initialLock ?? { foreground: '#2dd4bf', background: '#15191d', theme: 'dark', fontSize: 20 });
@@ -46,12 +44,10 @@
   const themeKey = $derived(selected || 'overview');
   const theme = $derived(hostThemes[themeKey] ?? localStorage.getItem(`aelab-theme:${themeKey}`) ?? 'dark');
   function toggleTheme() { hostThemes[themeKey] = theme === 'dark' ? 'light' : 'dark'; localStorage.setItem(`aelab-theme:${themeKey}`, hostThemes[themeKey]); }
-  let form = $state<{ kind: 'hosts' | 'projects' | 'services' | 'tools' | 'plugins'; existing?: Host | Project | Service | Tool | Plugin }>();
+  let form = $state<{ kind: 'hosts' | 'projects' | 'services' | 'tools'; existing?: Host | Project | Service | Tool }>();
   let altHeld = $state(false);
   let directoryChoice = $state<{ host: string; tool: Tool; yolo: boolean; alt: boolean }>();
-  let deployment = $state<{ host: string; plugin: string }>();
-  const localHosts = $derived((snapshot?.config.hosts ?? []).filter(host => host.transport === 'local'));
-  let editorOpen = $state(false); let pluginEditor = $state<{ host: string; plugin: string }>(); let launchMenu = $state(false);
+  let editorOpen = $state(false); let launchMenu = $state(false);
   let sectionState = $state<Record<string, Record<string, boolean>>>({});
   async function loadSections() { sectionState = await request('/api/state/sections'); }
   let stateWrites = Promise.resolve();
@@ -74,20 +70,12 @@
     try { const result = await request<Result>(`/api/hosts/${encodeURIComponent(selected)}/tmux/sessions/${encodeURIComponent(name)}`, 'DELETE'); if (result.status) throw new Error(result.error || result.output); await refresh(selected); } catch (e) { error = String(e); }
   }
   let log = $state<{ title: string; content: string }>(); let busyAction = $state('');
-  let pluginResults = $state<Record<string, PluginObservation>>({});
-  let probing = $state<Record<string, boolean>>({});
-  async function probePlugin(plugin: Plugin) {
-    const id = selected; const key = `${id}:${plugin.id}`;
-    if (probing[key]) return; probing[key] = true;
-    try { pluginResults[key] = await request<PluginObservation>(`/api/hosts/${encodeURIComponent(id)}/plugins/${encodeURIComponent(plugin.id)}/runs`, 'POST', {}); }
-    catch (e) { error = String(e); } finally { probing[key] = false; }
-  }
   let launchContainer = $state<HTMLDivElement>();
   function dismissLaunch(event: PointerEvent) { if (event.target instanceof Node && !launchContainer?.contains(event.target)) launchMenu = false; }
   function toggleShells() { if (host) toggleSection('shells', !(sectionState[selected]?.shells ?? true)); }
   let discoveryView = $state<Record<string, boolean>>({});
-  function showingDiscovery(kind: 'tools' | 'services' | 'plugins') { return discoveryView[`${selected}:${kind}`] ?? false; }
-  function toggleDiscovery(kind: 'tools' | 'services' | 'plugins') {
+  function showingDiscovery(kind: 'tools' | 'services') { return discoveryView[`${selected}:${kind}`] ?? false; }
+  function toggleDiscovery(kind: 'tools' | 'services') {
     discoveryView[`${selected}:${kind}`] = !showingDiscovery(kind);
     if (sectionState[selected]?.[kind] === false) toggleSection(kind, true);
   }
@@ -95,29 +83,28 @@
   let discoverySearch = $state('');
   let toolInventories = $state<Record<string, ToolInventory>>({});
   let discovering = $state<Record<string, boolean>>({});
+  const pendingToolRefresh = new Set<string>();
   async function discoverTools(id: string, force = false) {
-    if (discovering[id]) return; discovering[id] = true;
+    if (discovering[id]) { if (force) pendingToolRefresh.add(id); return; }
+    discovering[id] = true;
     try { const inventory = await request<ToolInventory>(`/api/hosts/${encodeURIComponent(id)}/tools`, force ? 'POST' : 'GET'); toolInventories[id] = { ...inventory, tools: inventory.tools.map(row => ({ ...row, tool: identify(row.tool) })) }; }
-    catch (e) { error = String(e); } finally { discovering[id] = false; }
+    catch (e) { error = String(e); } finally {
+      discovering[id] = false;
+      if (pendingToolRefresh.delete(id)) void discoverTools(id, true);
+    }
   }
   function toolDiscovery(tool: Tool) { return toolInventories[selected]?.tools.find(row => row.tool.id === tool.id); }
   function toolState(tool: Tool) { return toolDiscovery(tool)?.state ?? 'checking'; }
-  let pluginAvailability = $state<Record<string, PluginAvailability[]>>({});
-  async function discoverPlugins(id: string) {
-    try { pluginAvailability[id] = await request<PluginAvailability[]>(`/api/hosts/${encodeURIComponent(id)}/plugins`); }
-    catch (e) { error = String(e); }
-  }
-  function pluginState(id: string) { return pluginAvailability[selected]?.find(row => row.plugin === id)?.state ?? 'checking'; }
-  async function toggleEnabled(kind: 'tools' | 'plugins', id: string) {
-    const hostID = selected, key = `${hostID}:${kind}:${id}`;
+  async function toggleTool(id: string) {
+    const hostID = selected, key = `${hostID}:tools:${id}`;
     if (enablePending[key]) return;
-    const enabled = !snapshot!.config.hosts.find(h => h.id === hostID)![kind].includes(id);
+    const enabled = !snapshot!.config.hosts.find(h => h.id === hostID)!.tools.includes(id);
     enablePending[key] = true;
     try {
       await configuration.update(config => {
         const h = config.hosts.find(h => h.id === hostID);
-        if (!h || !config[kind].some(item => item.id === id)) throw new Error('Host or definition was removed. Reload configuration.');
-        h[kind] = enabled ? [...new Set([...h[kind], id])] : h[kind].filter(value => value !== id);
+        if (!h || !config.tools.some(item => item.id === id)) throw new Error('Host or definition was removed. Reload configuration.');
+        h.tools = enabled ? [...new Set([...h.tools, id])] : h.tools.filter(value => value !== id);
       });
     } catch (e) { error = String(e); } finally { enablePending[key] = false; }
   }
@@ -131,7 +118,6 @@
   const parsed = $derived(route(pathname));
   const host = $derived(snapshot?.config.hosts.find(h => h.id === selected));
   const tools = $derived((snapshot?.config.tools ?? []).filter(tool => host?.tools.includes(tool.id)));
-  const plugins = $derived((snapshot?.config.plugins ?? []).filter(plugin => host?.plugins.includes(plugin.id)));
   const hostTint = $derived(tintFor(host));
   const observation = $derived(observations[selected]);
   const filteredDiscovery = $derived((observation?.discovered ?? []).filter(item => discoveryMatchesStatus(item, discoveryStatus) && discoveryMatchesSearch(item, discoverySearch) && !host?.services.some(service => service.provider === item.provider && service.target === item.target)));
@@ -214,7 +200,7 @@
   async function refresh(id: string, automatic = false) {
     if (pending[id] || (automatic && Date.now() - (refreshedAt[id] ?? 0) < 10000)) return;
     pending[id] = true;
-    if (selected === id) { void discoverTools(id); void discoverPlugins(id); }
+    if (selected === id) { void discoverTools(id); }
     try {
       await Promise.all([
         request<Observation>(`/api/hosts/${encodeURIComponent(id)}/status`).then(status => observations[id] = status),
@@ -239,9 +225,9 @@
       if (sectionState[oldHost.id]) { sectionState[newHost.id] = sectionState[oldHost.id]; delete sectionState[oldHost.id]; }
       if (selected === oldHost.id) choose(newHost.id);
     }
-    for (const kind of ['tools','plugins'] as const) if (saved.config[kind].some(item => !previous[kind].some(old => old.id === item.id))) discoveryView[`${selected}:${kind}`] = true;
+    if (saved.config.tools.some(item => !previous.tools.some(old => old.id === item.id))) discoveryView[`${selected}:tools`] = true;
     const connection = (config: Config) => { const h = config.hosts.find(h => h.id === selected); return [h?.destination, h?.port, h?.transport]; };
-    if (selected && JSON.stringify([previous.tools, previous.plugins, previous.paths, connection(previous)]) !== JSON.stringify([saved.config.tools, saved.config.plugins, saved.config.paths, connection(saved.config)])) { void discoverTools(selected, true); void discoverPlugins(selected); }
+    if (selected && JSON.stringify([previous.tools, previous.paths, connection(previous)]) !== JSON.stringify([saved.config.tools, saved.config.paths, connection(saved.config)])) { void discoverTools(selected, true); }
     if (selected && previous.hosts.find(host => host.id === selected)?.dockerContext !== saved.config.hosts.find(host => host.id === selected)?.dockerContext) void refresh(selected);
     for (const item of saved.config.hosts) {
       if (item.tint !== previous.hosts.find(h => h.id === item.id)?.tint && validTint(item.tint)) {
@@ -250,25 +236,25 @@
     }
   }
   let reordering = $state(false);
-  async function reorderRows(kind: 'hosts' | 'projects' | 'services' | 'tools' | 'plugins', id: string, target: string) {
+  async function reorderRows(kind: 'hosts' | 'projects' | 'services' | 'tools', id: string, target: string) {
     if (reordering || id === target) return;
     const hostID = selected; reordering = true;
     try {
       await configuration.update(config => {
-        const rows: { id: string }[] | undefined = kind === 'hosts' || kind === 'tools' || kind === 'plugins' ? config[kind] : config.hosts.find(h => h.id === hostID)?.[kind];
+        const rows: { id: string }[] | undefined = kind === 'hosts' || kind === 'tools' ? config[kind] : config.hosts.find(h => h.id === hostID)?.[kind];
         if (!rows || !moveRow(rows, id, target)) throw new Error('Row was removed. Reload configuration.');
       });
     } catch (e) { error = String(e); } finally { reordering = false; }
   }
-  async function remove(kind: 'hosts' | 'projects' | 'services' | 'tools' | 'plugins', id: string) {
-    const shared = kind === 'tools' || kind === 'plugins';
+  async function remove(kind: 'hosts' | 'projects' | 'services' | 'tools', id: string) {
+    const shared = kind === 'tools';
     if (shared && host?.transport !== 'local') return;
-    if (shared && !confirm(`Delete this shared ${kind === 'tools' ? 'tool' : 'plugin'} definition from all hosts? Files and running programs are kept. Use Discovery to disable it only on one host.`)) return;
+    if (shared && !confirm(`Delete this shared tool definition from all hosts? Files and running programs are kept. Use Discovery to disable it only on one host.`)) return;
     if (!shared && !confirm(kind === 'hosts' ? `Delete host “${id}” and its projects, services and enabled selections? Running programs are not stopped.` : `Delete ${kind} entry “${id}”? This changes configuration only.`)) return;
     try {
       const updated = structuredClone($state.snapshot(snapshot!.config));
-      const rows = (kind === 'hosts' ? updated.hosts : shared ? updated[kind as 'tools' | 'plugins'] : updated.hosts.find(h => h.id === selected)![kind]) as { id: string }[]; const index = rows.findIndex(x => x.id === id); if (index < 0) throw new Error("Entry no longer exists"); rows.splice(index, 1);
-      if (shared) for (const h of updated.hosts) { const collection = kind as 'tools' | 'plugins'; h[collection] = h[collection].filter(value => value !== id); }
+      const rows = (kind === 'hosts' ? updated.hosts : shared ? updated.tools : updated.hosts.find(h => h.id === selected)![kind]) as { id: string }[]; const index = rows.findIndex(x => x.id === id); if (index < 0) throw new Error("Entry no longer exists"); rows.splice(index, 1);
+      if (shared) for (const h of updated.hosts) h.tools = h.tools.filter(value => value !== id);
       await save(updated);
       if (kind === "hosts" && selected === id) choose('');
     } catch (e) { error = String(e); }
@@ -315,7 +301,7 @@
   const shortcutPins = $derived(selected ? (pinnedShells[selected] ?? []).map(pin => ({ host: selected, pin, number: pin.number })) : allPins.map(entry => ({ ...entry, host: entry.host.id })));
   let shortcutDigits = ''; let shortcutTimer: ReturnType<typeof setTimeout>;
   function pinnedShortcut(event: KeyboardEvent) {
-    if (matrixActive || screensaver || parsed.terminal || !authenticated || form || editorOpen || pluginEditor || launchMenu || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat) return;
+    if (matrixActive || screensaver || parsed.terminal || !authenticated || form || editorOpen || launchMenu || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.repeat) return;
     const target = event.target;
     if (target instanceof Element && target.closest('input,textarea,select,button,a,[contenteditable]')) return;
     if (!/^[0-9]$/.test(event.key) && !(event.key === 'Enter' && shortcutDigits)) { clearTimeout(shortcutTimer); shortcutDigits = ''; return; }
@@ -339,6 +325,14 @@
     })();
     const timer = setInterval(() => { now = Date.now(); if (authenticated && !document.hidden && !parsed.terminal) { if (selected) void refresh(selected, true); else refreshOverview(); } }, 15000);
     const refreshVisiblePins = () => { if (authenticated && !document.hidden && !parsed.terminal) { if (selected) void refreshPins(selected); else refreshAllPins(); } };
+    let lastRenewal = Date.now();
+    const renew = () => {
+      if (!authenticated || Date.now() - lastRenewal < 3600000) return;
+      lastRenewal = Date.now();
+      void request('/api/auth/session').catch(() => { lastRenewal = 0; });
+    };
+    const activityEvents = ['focus', 'pointerdown', 'keydown', 'wheel'];
+    for (const event of activityEvents) window.addEventListener(event, renew, { passive: true, capture: true });
     const pinsTimer = setInterval(refreshVisiblePins, 2000);
     const events = terminalEvents(id => { if (authenticated && !parsed.terminal && config?.hosts.some(host => host.id === id)) void refreshPins(id); });
     window.addEventListener('focus', refreshVisiblePins);
@@ -352,7 +346,7 @@
     };
     window.addEventListener('storage', storage);
     const pop = () => { pathname = location.pathname; selected = route(location.pathname).host ?? ''; if (authenticated) { if (selected) void refresh(selected); else refreshOverview(); } }; window.addEventListener('popstate', pop);
-    return () => { disposed = true; clearTimeout(shortcutTimer); clearInterval(timer); clearInterval(external); clearInterval(pinsTimer); events.close(); window.removeEventListener('focus', refreshVisiblePins); document.removeEventListener('visibilitychange', refreshVisiblePins); window.removeEventListener('popstate', pop); window.removeEventListener('storage', storage); };
+    return () => { disposed = true; for (const event of activityEvents) window.removeEventListener(event, renew, true); clearTimeout(shortcutTimer); clearInterval(timer); clearInterval(external); clearInterval(pinsTimer); events.close(); window.removeEventListener('focus', refreshVisiblePins); document.removeEventListener('visibilitychange', refreshVisiblePins); window.removeEventListener('popstate', pop); window.removeEventListener('storage', storage); };
   });
 </script>
 <svelte:window onkeyup={event => altHeld = event.altKey} onblur={() => altHeld = false} onpointermove={event => altHeld = event.altKey} onpointerdown={dismissLaunch} onkeydown={event => { altHeld = event.altKey; if (event.key === 'Escape') { launchMenu = false; shortcutDigits = ''; clearTimeout(shortcutTimer); } else pinnedShortcut(event); }} />
@@ -381,15 +375,9 @@
       <Section title="TOOLS" expanded={sectionState[selected]?.tools ?? true} onToggle={value => toggleSection('tools', value)}>{#snippet actions()}<button aria-label="Add tool" onclick={() => form = { kind: 'tools' }}>+</button><button aria-label="Discovery tools" title="All tools" aria-pressed={showingDiscovery('tools')} onclick={() => toggleDiscovery('tools')}><Icon name="filter" /></button>{#if showingDiscovery('tools')}<button aria-label="Refresh tools" title="Refresh" disabled={discovering[selected]} onclick={() => discoverTools(selected, true)}><Icon name="reload" /></button>{/if}{/snippet}
         <ul use:sortable={{ group: 'tools', move: (id, target) => { void reorderRows('tools', id, target); } }}>{#each showingDiscovery('tools') ? config?.tools ?? [] : tools as t (t.id)}<li class="managed-row" data-reorder-id={t.id}><div class="managed-content"><a class="row-title" class:alt-launch={altHeld && t.altArguments !== undefined} href={terminalURL({host: selected, tool: t.id, alt: altHeld && t.altArguments !== undefined})} aria-disabled={!host.tools.includes(t.id) || toolState(t) !== 'installed'} onclick={event => { event.preventDefault(); if (host.tools.includes(t.id) && toolState(t) === 'installed') openTool(t, false, event.altKey && t.altArguments !== undefined); }} target="_blank" rel="noreferrer">{t.name}{#if altHeld && t.altArguments !== undefined}<span class="alt-label">ALT</span>{/if}</a><small><PathLabel path={toolDiscovery(t)?.path ?? t.executable} /></small>{#if toolDiscovery(t)?.error}<p class="error">{toolDiscovery(t)?.error}</p>{/if}</div><div class="actions managed-actions">
           {#if t.yoloArguments && host.tools.includes(t.id)}<button disabled={!t.directory && !observation?.home} class:alt-launch={altHeld && t.altArguments !== undefined} onclick={event => openTool(t, true, event.altKey && t.altArguments !== undefined)}>YOLO{#if altHeld && t.altArguments !== undefined}<span class="alt-label">ALT</span>{/if}</button>{/if}
-          <button aria-label="Edit" title="Edit global tool" onclick={() => form = { kind: 'tools', existing: t }}><Icon name="edit" /></button>{#if host.transport === 'local' && !showingDiscovery('tools')}<button aria-label="Delete tool definition" title="Delete shared definition" onclick={() => remove('tools', t.id)}><Icon name="close" /></button>{:else}<button class="selection-toggle" aria-label={`${host.tools.includes(t.id) ? 'Disable' : 'Enable'} tool ${t.name}`} aria-pressed={host.tools.includes(t.id)} title={host.tools.includes(t.id) ? 'Disable on this host' : 'Enable on this host'} disabled={enablePending[`${selected}:tools:${t.id}`] || (!host.tools.includes(t.id) && toolState(t) !== 'installed')} onclick={() => toggleEnabled('tools', t.id)}><Icon name={host.tools.includes(t.id) && !showingDiscovery('tools') ? 'close' : 'validate'} /></button>{/if}</div><div class="managed-status"><StatusBadge state={toolState(t)} showInstalled={showingDiscovery('tools')} /></div><Reorder id={t.id} name={t.name} group={'tools'} rows={showingDiscovery('tools') ? config?.tools ?? [] : tools} disabled={reordering} move={(id, target) => { void reorderRows('tools', id, target); }} /></li>{/each}</ul>
+          <button aria-label="Edit" title="Edit global tool" onclick={() => form = { kind: 'tools', existing: t }}><Icon name="edit" /></button>{#if host.transport === 'local' && !showingDiscovery('tools')}<button aria-label="Delete tool definition" title="Delete shared definition" onclick={() => remove('tools', t.id)}><Icon name="close" /></button>{:else}<button class="selection-toggle" aria-label={`${host.tools.includes(t.id) ? 'Disable' : 'Enable'} tool ${t.name}`} aria-pressed={host.tools.includes(t.id)} title={host.tools.includes(t.id) ? 'Disable on this host' : 'Enable on this host'} disabled={enablePending[`${selected}:tools:${t.id}`] || (!host.tools.includes(t.id) && toolState(t) !== 'installed')} onclick={() => toggleTool(t.id)}><Icon name={host.tools.includes(t.id) && !showingDiscovery('tools') ? 'close' : 'validate'} /></button>{/if}</div><div class="managed-status"><StatusBadge state={toolState(t)} showInstalled={showingDiscovery('tools')} /></div><Reorder id={t.id} name={t.name} group={'tools'} rows={showingDiscovery('tools') ? config?.tools ?? [] : tools} disabled={reordering} move={(id, target) => { void reorderRows('tools', id, target); }} /></li>{/each}</ul>
 
       </Section>
-        <Section title="PLUGINS" expanded={sectionState[selected]?.plugins ?? true} onToggle={value => toggleSection('plugins', value)}>{#snippet actions()}<button aria-label="Add plugin" title="Add plugin" onclick={() => form = { kind: 'plugins' }}>+</button><button aria-label="Discovery plugins" title="All plugins" aria-pressed={showingDiscovery('plugins')} onclick={() => toggleDiscovery('plugins')}><Icon name="filter" /></button>{#if showingDiscovery('plugins')}<button aria-label="Refresh plugins" title="Refresh" onclick={() => discoverPlugins(selected)}><Icon name="reload" /></button>{/if}{/snippet}
-          <ul use:sortable={{ group: 'plugins', move: (id, target) => { void reorderRows('plugins', id, target); } }}>{#each showingDiscovery('plugins') ? config?.plugins ?? [] : plugins as plugin (plugin.id)}{@const result = pluginResults[`${selected}:${plugin.id}`]}<li class="managed-row" data-reorder-id={plugin.id}><div class="managed-content"><div class="plugin-heading"><button class="row-title plugin-run" aria-label={`Probe ${plugin.name}`} disabled={probing[`${selected}:${plugin.id}`] || !host.plugins.includes(plugin.id) || pluginState(plugin.id) !== 'installed'} onclick={() => probePlugin(plugin)}>{plugin.name}</button>{#if host.transport !== 'local' && !['installed', 'checking'].includes(pluginState(plugin.id)) && localHosts.length && pluginHasSource(plugin)}<button aria-label={`Deploy script ${plugin.name}`} title="Deploy from local host" onclick={() => deployment = { host: selected, plugin: plugin.id }}><Icon name="upload" /></button>{/if}</div>
-            {#if result?.report}<p>{result.report.summary}</p><dl class="plugin-details">{#each result.report.details as detail}<div><dt>{detail.label}</dt><dd>{detail.value}</dd></div>{/each}</dl>{/if}
-            {#if result?.error}<p class="error" role="alert">{result.error}</p>{/if}{#if result}<small><span class="label-chip">Checked {new Date(result.checked).toLocaleString()} · exit {result.exitStatus}</span></small>{:else}<small><span class="label-chip">Run on demand</span></small>{/if}
-          </div><div class="actions managed-actions plugin-actions"><button aria-label={`Edit script ${plugin.name}`} title="Edit script" disabled={!pluginAvailability[selected]?.find(row => row.plugin === plugin.id)?.source} onclick={() => pluginEditor = { host: selected, plugin: plugin.id }}><Icon name="code" /></button><button aria-label="Edit" title="Edit global plugin" onclick={() => form = { kind: 'plugins', existing: plugin }}><Icon name="edit" /></button>{#if host.transport === 'local' && !showingDiscovery('plugins')}<button aria-label="Delete plugin definition" title="Delete shared definition" onclick={() => remove('plugins', plugin.id)}><Icon name="close" /></button>{:else}<button class="selection-toggle" aria-label={`${host.plugins.includes(plugin.id) ? 'Disable' : 'Enable'} plugin ${plugin.name}`} aria-pressed={host.plugins.includes(plugin.id)} title={host.plugins.includes(plugin.id) ? 'Disable on this host' : 'Enable on this host'} disabled={enablePending[`${selected}:plugins:${plugin.id}`] || (!host.plugins.includes(plugin.id) && pluginState(plugin.id) !== 'installed')} onclick={() => toggleEnabled('plugins', plugin.id)}><Icon name={host.plugins.includes(plugin.id) && !showingDiscovery('plugins') ? 'close' : 'validate'} /></button>{/if}</div><div class="managed-status"><StatusBadge state={result?.error ? 'failed' : result?.report?.status ?? pluginState(plugin.id)} showInstalled={showingDiscovery('plugins')} /></div><Reorder id={plugin.id} name={plugin.name} group={'plugins'} rows={showingDiscovery('plugins') ? config?.plugins ?? [] : plugins} disabled={reordering} move={(id, target) => { void reorderRows('plugins', id, target); }} /></li>{/each}</ul>
-        </Section>
       <Section title="SERVICES" expanded={sectionState[selected || 'overview']?.['services'] ?? true} onToggle={value => toggleSection('services', value)}>{#snippet actions()}<button aria-label="Add service" onclick={() => form = { kind: 'services' }}>+</button><button aria-label="Discovery services" title="Discovery" aria-pressed={showingDiscovery('services')} onclick={() => toggleDiscovery('services')}><Icon name="filter" /></button>{#if showingDiscovery('services')}<button aria-label="Refresh services" title="Refresh" disabled={pending[selected]} onclick={() => refresh(selected)}><Icon name="reload" /></button>{/if}{/snippet}{#if !showingDiscovery('services')}<ul use:sortable={{ group: `services:${selected}`, move: (id, target) => { void reorderRows('services', id, target); } }}>{#each host.services as s (s.id)}<li class="managed-row" data-reorder-id={s.id} class:highlight={parsed.service === s.id}><div class="managed-content"><a class="row-title" href={appPath(`/api/hosts/${selected}/services/${s.id}`)} onclick={event => { event.preventDefault(); void serviceAction(s, 'status'); }}>{s.name}</a><small><span class="label-chip">{s.provider} · {s.target}</span></small><div class="actions service-actions">{#each ['status', 'logs', 'start', 'stop', 'restart'] as op}<button disabled={busyAction === s.id || (s.provider === 'launchd' && op === 'stop' && !s.plist)} title={s.provider === 'launchd' && op === 'stop' && !s.plist ? 'Configure the plist path before stopping' : undefined} onclick={() => serviceAction(s, op)}>{op}</button>{/each}</div></div><div class="actions managed-actions"><button aria-label="Edit" title="Edit" onclick={() => form = { kind: 'services', existing: s }}><Icon name="edit" /></button><button aria-label="Delete" title="Delete" onclick={() => remove('services', s.id)}><Icon name="close" /></button></div><div class="managed-status"><StatusBadge state={nativeState(s)} stale={stale(observation)} /></div><Reorder id={s.id} name={s.name} group={`services:${selected}`} rows={host.services} disabled={reordering} move={(id, target) => { void reorderRows('services', id, target); }} /></li>{/each}</ul>
       {:else}<div class="discovery-filter"><input type="search" aria-label="Search services" placeholder="Search services…" bind:value={discoverySearch} /><label>Status<select aria-label="Discovery status" bind:value={discoveryStatus}><option value="running">Running</option><option value="all">All statuses</option>{#each discoveryStates as state}<option value={state}>{state}</option>{/each}</select></label></div><small>{filteredDiscovery.length} of {observation?.discovered.length ?? 0} entries</small>{#each [['systemd', observation?.systemd], ['launchd', observation?.launchd], ['docker', observation?.docker]] as [provider, result]}{#if result && (result as Result).status}<details class="provider-notice"><summary>{provider === 'docker' ? '' : `${provider}: `}{serviceDiscoveryMessage(provider as string, result as Result)}</summary><pre>{(result as Result).error || (result as Result).output}</pre></details>{/if}{/each}<ul>{#each filteredDiscovery as item}<li class="row" class:macos-service-discovery={observation?.platform === 'macos'}><div><span class="row-title">{item.target}</span><small><span class="label-chip">{item.provider} · {item.state} {item.composeProject ? `· ${item.composeProject}` : ''}</span></small></div><button disabled={host.services.some(s => s.provider === item.provider && s.target === item.target)} aria-label={`Pin service ${item.target}`} title="Pin service" onclick={() => curate(item)}><Icon name="validate" /></button></li>{/each}</ul>{#if !filteredDiscovery.length}<p class="muted">No available services match these filters. Try All statuses or clear the search.</p>{/if}{/if}
       </Section>
@@ -403,10 +391,8 @@
 
 {#if editorOpen && authenticated}<ConfigEditor {request} close={() => editorOpen = false} saved={async () => { await refreshConfig(); if (!parsed.terminal) await loadSections(); if (selected && !config?.hosts.some(h => h.id === selected)) choose(''); else if (selected && !parsed.terminal) await refresh(selected); }} />{/if}
 
-{#if pluginEditor}<PluginEditor host={pluginEditor.host} plugin={pluginEditor.plugin} source={pluginAvailability[pluginEditor.host]?.find(row => row.plugin === pluginEditor?.plugin)?.source} {request} close={() => pluginEditor = undefined} />{/if}
 
 {#if directoryChoice}<DirectoryPicker host={directoryChoice.host} initial={observations[directoryChoice.host]?.home} {request} choose={path => { const choice = directoryChoice!; window.open(terminalURL({ host: choice.host, tool: choice.tool.id, yolo: choice.yolo, alt: choice.alt, directory: path }), '_blank', 'noopener'); directoryChoice = undefined; }} close={() => directoryChoice = undefined} />{/if}
-{#if deployment}<PluginDeployment host={deployment.host} plugin={deployment.plugin} {localHosts} {request} deployed={() => { if (deployment) void discoverPlugins(deployment.host); }} close={() => deployment = undefined} />{/if}
 
 {#if matrixActive}<MatrixRainScreen foreground={lockAppearance.foreground} background={lockAppearance.background} bind:fontSize={matrixFontSize}
   label="Locked aelab" actionLabel="Toggle sign-in form" description="Press Escape or click to toggle the sign-in form. Use + and - to resize the rain, and 0 to reset."

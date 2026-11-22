@@ -6,11 +6,11 @@ A single [Swift](https://www.swift.org/) executable provides the CLI, [Hummingbi
 
 ## Features
 
-- Projects, shared tools and plugins, enabled per host; per-host themes and a responsive grid of cards.
+- Projects, shared tools, enabled per host; per-host themes and a responsive grid of cards.
 - systemd, launchd, Docker and Compose status, logs and lifecycle controls.
 - Browser shells, pinned terminals and persistent tmux sessions, with deep links, clipboard, custom colors, file dropping and screenshot pasting.
 - [Matrix rain](Frontend/src/matrix-rain/README.md) from the logo, or a password-gated privacy screen from Lock.
-- Configuration forms and a validated file editor; host directory picker and script editing/deployment.
+- Configuration forms, a validated configuration editor, and a host directory picker.
 - Admin login, SSH keys/agent authentication, strict host verification, paired TLS daemons and audit records.
 
 ## UI
@@ -125,7 +125,7 @@ Runtime data stays outside the checkout and survives rebuilds and reinstalls.
 | --- | --- | --- |
 | Command | `~/.local/bin/aelab` | Add its directory to your shell's PATH; `install --prefix PATH` uses `PATH/bin/aelab` |
 | Installed releases and dashboard | `~/.local/share/aelab` | Absolute `$XDG_DATA_HOME` uses `$XDG_DATA_HOME/aelab`; `--prefix PATH` uses `PATH/share/aelab` |
-| Runtime data | `~/.aelab` | Configuration, credentials, state, daemon data, terminal uploads, deployed plugins and service logs. `$AELAB_HOME` or `--home PATH` changes the runtime home |
+| Runtime data | `~/.aelab` | Configuration, credentials, state, daemon data, terminal uploads and service logs. `$AELAB_HOME` or `--home PATH` changes the runtime home |
 
 ## CLI
 
@@ -148,7 +148,7 @@ Before installation, use `./.ae` in place of `aelab`. See `aelab help` for confi
 swift test
 npm test --prefix Frontend
 python3 Scripts/generate-api.py --check
-python3 -m unittest discover -s Scripts -p 'test_api_docs.py'
+python3 -m unittest discover -s Scripts/tests -p 'test_api_docs.py'
 ```
 
 See [Verification](Docs/Verification.md) for HTTP, installation and SSH/browser checks.
@@ -157,7 +157,6 @@ See [Verification](Docs/Verification.md) for HTTP, installation and SSH/browser 
 
 - [Installation and configuration](Docs/Installation.md)
 - [Configuration example](Docs/Config/aelab.example.json)
-- [Script plugins](Plugins/README.md)
 - [Daemon hosts](Docs/Daemon.md)
 - [Specification and roadmap](Docs/Specification.md)
 - API reference: `/api/docs` on your running instance

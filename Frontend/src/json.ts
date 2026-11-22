@@ -38,19 +38,3 @@ export function jsonLines(value: string, ranges: FoldRange[], collapsed: number[
 export function jsonTokens(value: string): { text: string; kind: string }[] {
   return value.split(/("(?:[^"\\]|\\.)*"\s*:|"(?:[^"\\]|\\.)*"|\b(?:true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g).map(text => ({ text, kind: /^"/.test(text) ? (/:$/.test(text) ? 'json-key' : 'json-string') : /^(true|false|null)$/.test(text) ? 'json-literal' : /^-?\d/.test(text) ? 'json-number' : '' }));
 }
-
-export function codeTokens(value: string, language: string): { text: string; kind: string }[] {
-  if (language === 'json') return jsonTokens(value);
-  const expression = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`|\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*|\b\d+(?:\.\d+)?\b|\b(?:if|else|elif|then|fi|do|done|for|while|case|esac|in|function|def|end|class|module|require|puts|let|var|func|struct|enum|import|return|guard|throw|try|await|public|private|true|false|nil)\b)/g;
-  return value.split(expression).filter(Boolean).map(text => ({ text, kind: /^(#|\/\/|\/\*)/.test(text) ? 'code-comment' : /^["'`]/.test(text) ? 'json-string' : /^\d/.test(text) ? 'json-number' : /^(?:if|else|elif|then|fi|do|done|for|while|case|esac|in|function|def|end|class|module|require|puts|let|var|func|struct|enum|import|return|guard|throw|try|await|public|private|true|false|nil)$/.test(text) ? 'json-literal' : '' }));
-}
-
-/** Split highlighted tokens into logical source lines, preserving multiline token styles. */
-export function codeLines(value: string, language: string): { text: string; kind: string }[][] {
-  const lines: { text: string; kind: string }[][] = [[]];
-  for (const token of codeTokens(value, language)) {
-    const parts = token.text.split('\n');
-    parts.forEach((text, index) => { if (index) lines.push([]); lines[lines.length - 1].push({ text, kind: token.kind }); });
-  }
-  return lines;
-}

@@ -61,10 +61,10 @@ enum APIReference {
               if(path.startsWith(prefix+'/')){
                 if(!hostGroups){
                   const hosts=group(prefix,routes);
-                  hostGroups=Object.fromEntries(['Host & discovery','Plugins','Services','Shells'].map(label=>[label,group(label,hosts)]));
+                  hostGroups=Object.fromEntries(['Host & discovery','Services','Shells'].map(label=>[label,group(label,hosts)]));
                 }
                 const resource=path.slice(prefix.length+1).split('/')[0];
-                parent=hostGroups[resource==='plugins'?'Plugins':resource==='services'?'Services':['terminals','temporary-terminals','terminal-tickets','tmux'].includes(resource)?'Shells':'Host & discovery'];
+                parent=hostGroups[resource==='services'?'Services':['terminals','temporary-terminals','terminal-tickets','tmux'].includes(resource)?'Shells':'Host & discovery'];
               }
               const section=['/api/auth','/api/config','/api/state','/api/docs'].find(prefix=>path===prefix||path.startsWith(prefix+'/'));
               if(section){

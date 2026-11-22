@@ -113,12 +113,6 @@ import Darwin
             }
         case "pair":
             try await DaemonCommands.run(args, store: store)
-        case "plugins":
-            try require(1); let config = try await store.read().config; try printJSON(config.enabledPlugins(config.host(args[0])))
-        case "probe":
-            guard args.count == 2 else { throw AEError("Use probe HOST PLUGIN") }
-            let observation = try await ops.probePlugin(host: args[0], plugin: args[1]); try printJSON(observation)
-            if observation.error != nil { exit(1) }
         case "hosts": try printJSON(await store.read().config.hosts)
         case "tools":
             try require(1); try printJSON(await ops.discoverTools(args[0]))

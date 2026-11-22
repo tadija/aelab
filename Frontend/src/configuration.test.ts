@@ -2,9 +2,9 @@ import { expect, it } from 'vitest';
 import { ConfigurationClient, RequestError } from './configuration';
 import { identifyConfig, type Config, type Snapshot } from './model';
 
-const initial = (): Snapshot => ({ revision: '0', config: { version: 1, tools: [], plugins: [], paths: [], ttyButtons: [], hosts: [
-  { id: 'a', name: 'A', transport: 'local', projects: [], services: [], tools: [], plugins: [] },
-  { id: 'b', name: 'B', transport: 'local', projects: [], services: [], tools: [], plugins: [] }
+const initial = (): Snapshot => ({ revision: '0', config: { version: 1, tools: [], paths: [], ttyButtons: [], hosts: [
+  { id: 'a', name: 'A', transport: 'local', projects: [], services: [], tools: [] },
+  { id: 'b', name: 'B', transport: 'local', projects: [], services: [], tools: [] }
 ] } });
 function fixture() {
   let server = initial(); let revision = 0; const writes: string[] = [];
@@ -22,14 +22,14 @@ function fixture() {
 }
 function deferred() { let release!: () => void; const promise = new Promise<void>(resolve => release = resolve); return { promise, release }; }
 
-it('queues rapid tool/plugin mutations and preserves both selections', async () => {
+it('queues rapid tool mutations and preserves both selections', async () => {
   const f = fixture(); await f.client.load(); const gate = deferred(); f.delayWrite(() => gate.promise);
   const first = f.client.update(config => config.hosts[0].tools.push('one'));
   const second = f.client.update(config => config.hosts[0].tools.push('two'));
-  const third = f.client.update(config => config.hosts[0].plugins.push('probe'));
+  const third = f.client.update(config => config.hosts[1].tools.push('three'));
   gate.release(); await Promise.all([first, second, third]);
   expect(f.writes).toEqual(['0', '1', '2']);
-  expect(f.shown.config.hosts[0].tools).toEqual(['one', 'two']); expect(f.server.config.hosts[0].plugins).toEqual(['probe']);
+  expect(f.shown.config.hosts[0].tools).toEqual(['one', 'two']); expect(f.server.config.hosts[1].tools).toEqual(['three']);
 });
 it('an earlier delayed poll cannot replace a newer saved snapshot', async () => {
   const f = fixture(); const gate = deferred(); f.delayRead(() => gate.promise);

@@ -142,7 +142,7 @@
     notifyProgramChange = () => {
       if (pinned && statusTimer === undefined) statusTimer = setTimeout(() => { statusTimer = undefined; events.changed(host.id); }, 150);
     };
-    term = new Terminal({ cursorBlink: true, macOptionClickForcesSelection: true, altClickMovesCursor: false, fontSize: 14, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", monospace', scrollback: 10000, theme: { background, foreground: '#d8e6df', cursor: '#34d399', selectionBackground: '#245747' }, allowProposedApi: false });
+    term = new Terminal({ cursorBlink: true, macOptionClickForcesSelection: true, altClickMovesCursor: false, fontSize: 14, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", monospace', scrollback: 10000, scrollSensitivity: 3, theme: { background, foreground: '#d8e6df', cursor: '#34d399', selectionBackground: '#245747' }, allowProposedApi: false });
     fit = new FitAddon(); term.loadAddon(fit); term.open(container); fit.fit();
     term.attachCustomKeyEventHandler(event => {
       if (shouldCopy(event.key, event.ctrlKey, event.metaKey, event.shiftKey, term.hasSelection())) { if (event.type === 'keydown') void copy(); return false; }
@@ -166,8 +166,27 @@
     });
     const resetHandler = term.parser.registerEscHandler({ final: 'c' }, () => { programStatuses.reset(); updateProgramStatus(); return false; });
     const key = term.onKey(() => { if (!replaying) { if (programRecords.some(record => record.state === 'done' || record.state === 'error') && socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ack-program-status' })); programStatuses.acknowledge(); updateProgramStatus(); } });
-    const input = term.onData(data => { send(pastingFiles ? data : (alt ? '\x1b' : '') + (shift && data.length === 1 ? data.toUpperCase() : data)); if (!replaying) shift = false; });
-    const binaryInput = term.onBinary(data => { if (socket?.readyState === WebSocket.OPEN) socket.send(Uint8Array.from(data, char => char.charCodeAt(0))); });
+    let wheelCopies = 1;
+    term.attachCustomWheelEventHandler(event => {
+      const mode = term.modes.mouseTrackingMode;
+      if (mode === 'none' || mode === 'x10' || event.deltaY === 0) return true;
+      // xterm emits one protocol report per wheel event, even for a fast wheel flick.
+      // Repeat its encoded report to preserve coordinates, modifiers and mouse protocol.
+      const unit = event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? term.rows
+        : event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 1 : 1 / 24;
+      wheelCopies = Math.max(1, Math.min(12, Math.round(Math.abs(event.deltaY) * unit)));
+      queueMicrotask(() => { wheelCopies = 1; });
+      return true;
+    });
+    const input = term.onData(data => {
+      if (pastingFiles || wheelCopies > 1) send(data.repeat(wheelCopies));
+      else send((alt ? '\x1b' : '') + (shift && data.length === 1 ? data.toUpperCase() : data));
+      if (!replaying) shift = false;
+    });
+    const binaryInput = term.onBinary(data => {
+      if (!replaying && socket?.readyState === WebSocket.OPEN)
+        socket.send(Uint8Array.from(data.repeat(wheelCopies), char => char.charCodeAt(0)));
+    });
     const resize = () => { fit.fit(); if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows })); };
     const observer = new ResizeObserver(resize); observer.observe(container);
     void (async () => {

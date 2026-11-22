@@ -1,11 +1,11 @@
 import type { ProgramRecord } from './programStatus';
 import { appPath, relativePath } from './basePath';
-export type Host = { id: string; name: string; destination?: string; transport?: 'ssh' | 'local' | 'daemon'; daemon?: string; port?: number; dockerContext?: string; background?: string; tint?: string; projects: Project[]; services: Service[]; tools: string[]; plugins: string[] };
+export type Host = { id: string; name: string; destination?: string; transport?: 'ssh' | 'local' | 'daemon'; daemon?: string; port?: number; dockerContext?: string; background?: string; tint?: string; projects: Project[]; services: Service[]; tools: string[] };
 export type Project = { id: string;  name: string; dir: string; session?: string };
 export type Service = { id: string;  name: string; provider: 'systemd' | 'launchd' | 'docker' | 'compose'; target: string; directory?: string; files?: string[]; environmentFile?: string; plist?: string; logFiles?: string[]; userUnit?: boolean; sudo?: boolean };
 export type Tool = { id: string;  name: string; directory?: string; executable: string; arguments: string[]; altArguments?: string[]; yoloArguments?: string[]; session?: string };
 export type TTYButton = { key: string; label: string };
-export type Config = { ttyButtons: TTYButton[]; version: number; tools: Tool[]; plugins: Plugin[]; paths: string[]; hosts: Host[] };
+export type Config = { ttyButtons: TTYButton[]; version: number; tools: Tool[]; paths: string[]; hosts: Host[] };
 export type Snapshot = { config: Config; revision: string };
 export type Result = { status: number; output: string; error: string; truncated: boolean };
 export type Discovery = { provider: Service['provider']; target: string; state: string; composeProject?: string; image?: string };
@@ -83,37 +83,30 @@ export function hostSourceName(transport: Host['transport'], destination: string
 }
 export function identify<T extends { name: string }>(item: T): T & { id: string } { return { ...item, id: nameID(item.name) }; }
 export function identifyConfig(config: Config): Config {
-  return { ...config, tools: config.tools.map(identify), plugins: config.plugins.map(identify), hosts: config.hosts.map(host => ({ ...identify(host), projects: host.projects.map(identify), services: host.services.map(identify) })) };
+  return { ...config, tools: config.tools.map(identify), hosts: config.hosts.map(host => ({ ...identify(host), projects: host.projects.map(identify), services: host.services.map(identify) })) };
 }
 export function definitionPayload<T extends { id: string }>({ id: _id, ...item }: T): Omit<T, 'id'> { return item; }
 export function configurationPayload(config: Config): unknown {
-  return { ...config, tools: config.tools.map(definitionPayload), plugins: config.plugins.map(definitionPayload), hosts: config.hosts.map(host => ({ ...definitionPayload(host), projects: host.projects.map(definitionPayload), services: host.services.map(definitionPayload) })) };
+  return { ...config, tools: config.tools.map(definitionPayload), hosts: config.hosts.map(host => ({ ...definitionPayload(host), projects: host.projects.map(definitionPayload), services: host.services.map(definitionPayload) })) };
 }
-export type EntityKind = 'hosts' | 'projects' | 'services' | 'tools' | 'plugins';
-export function renameReferences(config: Config, kind: 'tools' | 'plugins', from: string, to: string): void {
+export type EntityKind = 'hosts' | 'projects' | 'services' | 'tools';
+export function renameToolReferences(config: Config, from: string, to: string): void {
   if (from === to) return;
   for (const host of config.hosts) {
-    host[kind] = host[kind].map(id => id === from ? to : id);
+    host.tools = host.tools.map(id => id === from ? to : id);
   }
 }
 export function hostLocation(host: Host): string { return host.transport === 'local' ? 'local · server process' : host.destination ?? ''; }
 
 export type DiscoveredTool = { tool: Tool; state: 'installed' | 'unavailable' | 'discovery-error'; path?: string; error?: string; enabled: boolean };
 export type ToolInventory = { host: string; checked: string; staleAfterSeconds: number; tools: DiscoveredTool[] };
-export type PluginSource = { id: string; name: string; filename: string; language: string };
-export type PluginAvailability = { plugin: string; state: string; error?: string; source?: PluginSource };
 export function enabledTools(config: Config, host: Host): Tool[] { return config.tools.filter(tool => host.tools.includes(tool.id)); }
 
-export type Plugin = { source?: string; id: string; name: string; executable: string; arguments: string[]; timeout?: number };
-export type PluginReport = { version: number; status: 'ok' | 'warning' | 'critical' | 'unknown'; summary: string; details: { label: string; value: string }[] };
-export type PluginObservation = { host: string; plugin: string; checked: string; exitStatus: number; report?: PluginReport; error?: string };
 
 export type PinnedSession = { session?: string; number: number; id: string; host: string; cwd: string; project?: string; tool?: string; programStatus?: ProgramRecord };
 
 export type HostDirectory = { name: string; path: string };
 export type DirectoryListing = { host: string; path: string; home: string; parent?: string; directories: HostDirectory[]; truncated: boolean };
-export type PluginDeployment = { sourceHost: string; targetHost: string; plugin: string; filename: string; sourcePath: string; targetPath: string; configurationRevision: string; sourceRevision: string; targetRevision?: string; requiresBuild: boolean };
-export function pluginHasSource(plugin: Plugin): boolean { return [plugin.source, plugin.executable, ...plugin.arguments].some(path => path !== undefined && /^(?:\/|~\/).*\.(?:sh|bash|rb|swift)$/.test(path)); }
 
 export function tmuxSessionMessage(result: Result): string {
   const message = (result.error || result.output).trim();

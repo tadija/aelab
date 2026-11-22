@@ -4,7 +4,7 @@
   import { escapeDismiss } from './escapeDismiss';
   import type { Snippet } from 'svelte';
   let { kind, editing, shared = false, suggestedName = '', name = $bindable(''), submit, close, children }: { kind: string; editing: boolean; shared?: boolean; suggestedName?: string; name: string; submit: () => Promise<void>; close: () => void; children: Snippet } = $props();
-  const singular = $derived(({ hosts: 'host', projects: 'project', tools: 'tool', plugins: 'plugin', services: 'service' } as Record<string, string>)[kind] ?? kind);
+  const singular = $derived(({ hosts: 'host', projects: 'project', tools: 'tool', services: 'service' } as Record<string, string>)[kind] ?? kind);
   let customName = $state(untrack(() => editing && name !== suggestedName));
   let nameInput: HTMLInputElement;
   let formElement: HTMLFormElement;

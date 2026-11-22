@@ -53,15 +53,17 @@ Generated definitions are marked and may be replaced by later `--service` calls.
 
 Manual system-wide server, proxy and container examples remain under [Packaging](Packaging). The built-in service commands do not modify those installations.
 
+Dashboard sign-ins last 30 days. Activity in the dashboard or a terminal renews the login up to once an hour. Signing out, resetting the password, or restarting the server ends the login.
+
 ## Configuration and hosts
 
-`$AELAB_HOME/config/aelab.json` is the source of truth. Schema `version: 1` keeps tools, plugins, execution paths and terminal buttons central. Hosts own projects/services and select enabled tool/plugin IDs. See [Configuration](Config/README.md) and [the example](Config/aelab.example.json).
+`$AELAB_HOME/config/aelab.json` is the source of truth. Schema `version: 1` keeps tools, execution paths and terminal buttons central. Hosts own projects/services and select enabled tool IDs. See [Configuration](Config/README.md) and [the example](Config/aelab.example.json).
 
 Choose host transport explicitly: `local` executes as the server account; `ssh` uses keys/SSH agent authentication and verified host keys; `daemon` uses a paired direct TLS connection. See [Daemon hosts](Daemon.md) for on-host installation, pairing and service setup. Local hosts omit destination and port. Shared `paths` prepend literal absolute directories to PATH for discovery, commands and terminals. Project directories override tool working directories.
 
 Names determine URL IDs. Renaming changes links; forms update enabled selections and service references together. The configuration icon opens the running instance’s main file with highlighting, line numbers, folding and wrapping. Writes are validated, atomic and revision-checked. Close and reopen an editor to load the latest file; closing unsaved edits asks for confirmation. Changes affect new operations immediately; reconnect terminals to apply host changes. Environment changes require a restart.
 
-Drag handles, arrow keys and Move up/down controls reorder configured rows. Tool/plugin order is shared; project/service order belongs to each host. For shared tools and plugins, the rightmost × in enabled rows deletes the definition from all hosts only on an explicit local host, with confirmation. On remote hosts, × only disables that host’s selection. Discovery checkmarks toggle selections. Neither action deletes files or stops programs. Discovery filters show all candidates instead of enabled/configured entries. Tools and plugins must be available before enabling them; discovery never executes or installs them. Refresh appears within discovery views.
+Drag handles, arrow keys and Move up/down controls reorder configured rows. Tool order is shared; project/service order belongs to each host. For shared tools, the rightmost × in enabled rows deletes the definition from all hosts only on an explicit local host, with confirmation. On remote hosts, × only disables that host’s selection. Discovery checkmarks toggle selections. Neither action deletes files or stops programs. Discovery filters show all candidates instead of enabled/configured entries. Tools must be available before enabling them; discovery never executes or installs them. Refresh appears within discovery views.
 
 ## Services
 
@@ -87,6 +89,8 @@ Then enable Use sudo for that service and use its dashboard actions. Without non
 
 Creating a project creates its directory when missing. Its title opens a shell, or creates/attaches its configured tmux session. Project tool buttons use that directory. An optional tool `altArguments` list replaces normal arguments when you hold Alt while clicking its launch option; eligible options display ALT while the key is held. For example, use `"arguments": []` and `"altArguments": ["resume"]` to choose between a new Codex session and resume. YOLO uses an explicitly configured bypass preset, appended to either argument list; standalone tools use their default directory or ask you to choose one from the host directory picker.
 
+Mouse-wheel scrolling in the TTY scales with the wheel delta. Normal shell history scrolls at three times the browser-reported distance. Mouse-aware programs such as tmux receive more wheel steps on larger turns, up to twelve per event.
+
 The hostname menu opens temporary shells/tools or explicit tmux sessions. Pinning retains the current native terminal through browser disconnects; numbered dashboard shortcuts reopen it. Native pins and tmux shortcuts survive logout and subsequent logins. Signing out disconnects that login’s tabs; sign back in to resume. A password reset clears pins. Native shell pins end on server shutdown; tmux pins keep their shortcuts across server restarts. tmux sessions survive server restarts. Session rows support rename and confirmed deletion; renaming changes their URLs.
 
 Terminals inherit the host’s Terminal background. Click `cwd` to save a directory-specific override, or `host` to reset it. Theme/tint are remembered per host in the browser; section expansion lives separately in `state/sections.json`.
@@ -102,12 +106,6 @@ Drop files into a tty, or paste a screenshot with your normal paste shortcut. Th
 Files are saved privately under `~/.aelab/uploads` on the terminal's execution host, including SSH and daemon hosts. Aelab pastes each quoted absolute path separately without pressing Enter. The running program decides how to use it: supporting AI tools can create native image attachments, while shells receive ordinary file paths. Uploaded bytes never go into the PTY.
 
 Completed files remain available across tab closure, pinning, tmux and server restarts. Remove them from the host when no longer needed. Failed or cancelled incomplete transfers and the central temporary spool are cleaned up. Directory dropping is not supported.
-
-## Plugins
-
-Define probes centrally, then enable them per host. Click a title to run its probe or the Script icon to edit its configured Bash/Ruby/Swift source. Editors share a remembered wrapping preference, validate syntax and detect conflicting saves. Compiled plugins need rebuilding after source edits.
-
-Use `~/` for portable per-user paths. Absolute local script paths resolve on SSH hosts to `~/.aelab/plugins/SCRIPT_NAME/FILENAME`. The Deploy icon beside an unavailable remote plugin previews and copies its configured source from an explicit local host. It never copies binaries, installs interpreters, builds or runs a plugin. Close and reopen the dialog for a fresh preview. See [Plugins](../Plugins/README.md) for examples and the contract.
 
 ## Version
 

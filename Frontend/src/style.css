@@ -621,27 +621,6 @@ button:has(>.icon) {
   color: #7a3a9c;
 }
 
-.plugin-details {
-  font-size: .9rem;
-}
-
-.plugin-details>div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 4px 0;
-}
-
-.plugin-details dt {
-  color: var(--muted);
-}
-
-.plugin-details dd {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .config-field {
   display: grid;
   gap: 5px;
@@ -1167,19 +1146,6 @@ button:has(>.icon) {
   font: 12px -apple-system,sans-serif;
 }
 
-.plugin-run {
-  border: 0;
-  background: none;
-  padding: 0;
-  text-align: left;
-  color: var(--accent);
-}
-
-.code-comment {
-  color: var(--muted);
-  font-style: italic;
-}
-
 .pin-number:hover {
   text-decoration: none;
   background: color-mix(in srgb,var(--accent) 23%,transparent);
@@ -1493,15 +1459,6 @@ li[data-reorder-id] {
   margin-bottom: 0;
 }
 
-.plugin-heading {
-  align-self: start;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
 .discovery-filter>input[type=search] {
   flex: 1;
   min-width: 180px;
@@ -1520,7 +1477,7 @@ li[data-reorder-id] {
   display: contents;
 }
 
-.managed-content>.row-title,.managed-content>.plugin-heading {
+.managed-content>.row-title {
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
@@ -1550,12 +1507,6 @@ li[data-reorder-id] {
   justify-content: flex-end;
   flex-wrap: nowrap;
   padding: 0 !important;
-}
-
-.plugin-actions {
-  align-self: start;
-  flex-wrap: wrap;
-  max-width: 132px;
 }
 
 .service-actions button {

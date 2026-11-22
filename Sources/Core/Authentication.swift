@@ -27,8 +27,9 @@ public func constantTimeEqual(_ lhs: Data, _ rhs: Data) -> Bool {
     guard lhs.count == rhs.count else { return false }; var diff: UInt8 = 0
     for i in lhs.indices { diff |= lhs[i] ^ rhs[i] }; return diff == 0
 }
-public struct LoginSession: Codable, Sendable { public let token: String; public let csrf: String; public let expires: Date; public let owner: String }
+public struct LoginSession: Codable, Sendable { public let token: String; public let csrf: String; public var expires: Date; public let owner: String }
 public actor Authentication {
+    public static let lifetimeSeconds = 30 * 24 * 3600
     private let file: URL
     private var sessions: [String: LoginSession] = [:]
     private var credentialsRevision: String?
@@ -76,13 +77,19 @@ public actor Authentication {
         failures = 0
         sessions = sessions.filter { $0.value.expires > Date() }
         guard sessions.count < 32 else { throw AEError("Too many login sessions") }
-        let session = LoginSession(token: randomBytes(32).base64EncodedString(), csrf: randomBytes(32).base64EncodedString(), expires: Date().addingTimeInterval(12 * 3600), owner: currentRevision)
+        let session = LoginSession(token: randomBytes(32).base64EncodedString(), csrf: randomBytes(32).base64EncodedString(), expires: Date().addingTimeInterval(Double(Self.lifetimeSeconds)), owner: currentRevision)
         sessions[session.token] = session; return session
     }
     public func authorize(token: String?, csrf: String? = nil, mutation: Bool = false) throws -> LoginSession {
         guard let credentialsRevision, let data = try? Data(contentsOf: file), revision(data) == credentialsRevision else { sessions.removeAll(); throw AEError("Authentication required") }
         guard let token, let session = sessions[token], session.expires > Date() else { throw AEError("Authentication required") }
         if mutation { guard let csrf, constantTimeEqual(Data(csrf.utf8), Data(session.csrf.utf8)) else { throw AEError("CSRF token required") } }
+        return session
+    }
+    public func renew(token: String?) throws -> LoginSession {
+        var session = try authorize(token: token)
+        session.expires = Date().addingTimeInterval(Double(Self.lifetimeSeconds))
+        sessions[session.token] = session
         return session
     }
     /// Pins belong to the administrator's current credentials, independently of browser logins.

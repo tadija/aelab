@@ -9,7 +9,7 @@ FROM swift:6.4-bookworm AS backend
 WORKDIR /src
 COPY Package.swift Package.resolved VERSION ./
 COPY Plugins/BuildVersion/ Plugins/BuildVersion/
-COPY Tools/build-metadata.sh Tools/build-metadata.sh
+COPY Scripts/build-metadata.sh Scripts/build-metadata.sh
 ARG AELAB_BUILD=unknown
 RUN printf '%s\n' "$AELAB_BUILD" > BUILD
 COPY Sources/ Sources/

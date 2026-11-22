@@ -42,7 +42,7 @@ import Foundation
     #expect(try String(contentsOf: home.appendingPathComponent("state/audit.log"), encoding: .utf8).contains("restart"))
 }
 @Test func hostScopedLaunchAndLiteralArguments() throws {
-    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"host-a","projects":[{"name":"p","dir":"/srv/it's a project","session":"saved"}],"services":[],"tools":["t"],"plugins":[]},{"name":"b","destination":"host-b","projects":[],"services":[],"tools":[],"plugins":[]}],"tools":[{"name":"t","executable":"codex","arguments":["$(touch /tmp/evil)"]}],"plugins":[],"paths":[]}"#.utf8)
+    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"host-a","projects":[{"name":"p","dir":"/srv/it's a project","session":"saved"}],"services":[],"tools":["t"]},{"name":"b","destination":"host-b","projects":[],"services":[],"tools":[]}],"tools":[{"name":"t","executable":"codex","arguments":["$(touch /tmp/evil)"]}],"paths":[]}"#.utf8)
     let config = try JSONDecoder().decode(Configuration.self, from: data); try config.validate()
     let encoded = try JSONSerialization.jsonObject(with: jsonEncoder.encode(config)) as! [String: Any]
     #expect(encoded["projects"] == nil); #expect((encoded["hosts"] as? [[String: Any]])?.first?["projects"] != nil)
@@ -113,7 +113,7 @@ import Foundation
     await #expect(throws: (any Error).self) { _ = try await server.authorize(token: session.token) }
 }
 @Test func configurationRejectsCrossHostToolAndInvalidPaths() throws {
-    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"a","projects":[{"name":"p","dir":"/srv/p"}],"services":[],"tools":[],"plugins":[]},{"name":"b","destination":"b","projects":[],"services":[],"tools":["t"],"plugins":[]}],"tools":[{"name":"t","executable":"sh","arguments":[]}],"plugins":[],"paths":[]}"#.utf8)
+    let data = Data(#"{"version":1,"hosts":[{"name":"a","destination":"a","projects":[{"name":"p","dir":"/srv/p"}],"services":[],"tools":[]},{"name":"b","destination":"b","projects":[],"services":[],"tools":["t"]}],"tools":[{"name":"t","executable":"sh","arguments":[]}],"paths":[]}"#.utf8)
     let config = try JSONDecoder().decode(Configuration.self, from: data)
     #expect(throws: (any Error).self) { _ = try TerminalLaunch(host: "a", project: "p", tool: "t").resolve(config) }
     #expect(throws: (any Error).self) { try absolutePath("relative/path") }
@@ -280,7 +280,7 @@ import CPTY
 }
 
 @Test func nestedHostConfigurationScopesIdentifiersAndReferences() throws {
-    let text = #"{"version":1,"hosts":[{"name":"a","transport":"local","projects":[{"name":"app","dir":"/tmp"}],"services":[],"tools":["shell"],"plugins":[]},{"name":"b","transport":"local","projects":[],"services":[],"tools":["shell-b"],"plugins":[]}],"tools":[{"name":"shell","executable":"/bin/sh","arguments":[]},{"name":"shell-b","executable":"/bin/bash","arguments":[]}],"plugins":[],"paths":[]}"#
+    let text = #"{"version":1,"hosts":[{"name":"a","transport":"local","projects":[{"name":"app","dir":"/tmp"}],"services":[],"tools":["shell"]},{"name":"b","transport":"local","projects":[],"services":[],"tools":["shell-b"]}],"tools":[{"name":"shell","executable":"/bin/sh","arguments":[]},{"name":"shell-b","executable":"/bin/bash","arguments":[]}],"paths":[]}"#
     var config = try ConfigStore.validateDocument(text)
     #expect(try TerminalLaunch(host: "b", tool: "shell-b").resolve(config).1.contains("/bin/bash"))
     #expect(throws: (any Error).self) { _ = try TerminalLaunch(host: "b", project: "app").resolve(config) }
@@ -312,7 +312,7 @@ import CPTY
     let config = try ConfigStore.validateDocument(#"{"version":1,"hosts":[{"name":"local","transport":"local"}]}"#)
     #expect(throws: (any Error).self) { _ = try ConfigStore.validateDocument(#"{"version":1,"hosts":[],"projects":[{"id":"do-not-drop"}]}"#) }
     let host = try config.host("local")
-    #expect(host.projects.isEmpty && host.services.isEmpty && host.tools.isEmpty && host.plugins.isEmpty)
+    #expect(host.projects.isEmpty && host.services.isEmpty && host.tools.isEmpty)
     do {
         _ = try ConfigStore.validateDocument(#"{"version":9,"hosts":[{"name":"local","transport":"local"}]}"#)
         Issue.record("Unsupported version was accepted")
@@ -343,8 +343,9 @@ import CPTY
     #expect(config.hosts[0].services[0].id == "web-service")
     let data = try configurationData(config)
     #expect(!String(decoding: data, as: UTF8.self).contains("\"id\""))
+    #expect(!String(decoding: data, as: UTF8.self).contains("\"plugins\""))
     let roundTrip = try ConfigStore.validateDocument(String(decoding: data, as: UTF8.self))
-    #expect(roundTrip.plugins[0].id == "shared-plugin")
+    #expect(roundTrip.hosts[0].tools == ["shared-tool"])
     config.hosts.append(Host(name: "Dèv---host", transport: .local))
     #expect(throws: (any Error).self) { try config.validate() }
     config.hosts.removeLast()

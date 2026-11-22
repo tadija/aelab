@@ -6,8 +6,7 @@
       "transport": "local",
       "projects": [],
       "services": [],
-      "tools": [],
-      "plugins": []
+      "tools": []
     },
     {
       "name": "dev-server",
@@ -33,8 +32,7 @@
       ],
       "tools": [
         "codex"
-      ],
-      "plugins": []
+      ]
     },
     {
       "name": "app-server",
@@ -72,8 +70,7 @@
       ],
       "tools": [
         "approved-host-diagnostic"
-      ],
-      "plugins": []
+      ]
     },
     {
       "name": "mac-server",
@@ -81,7 +78,6 @@
       "dockerContext": "desktop-linux",
       "projects": [],
       "tools": [],
-      "plugins": [],
       "services": [
         {
           "name": "Example agent",
@@ -164,11 +160,6 @@
       "executable": "opencode",
       "arguments": []
     }
-  ],
-  "plugins": [
-    {"name":"Disk space","executable":"/bin/bash","arguments":["~/.aelab/plugins/disk-space.sh"]},
-    {"name":"Process count","executable":"ruby","arguments":["~/.aelab/plugins/process-count.rb"]},
-    {"name":"Uptime","executable":"swift","arguments":["~/.aelab/plugins/uptime.swift"],"timeout":30}
   ],
   "paths": [
     "/opt/homebrew/bin",

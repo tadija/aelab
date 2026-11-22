@@ -31,7 +31,7 @@ public actor LiveTerminal {
     private var reader: Task<Void, Never>?
     private var clients: [UUID: AsyncStream<Data>.Continuation] = [:]
     private var clientLogins: [UUID: String] = [:]
-    private var replay = Data()
+    private var replay = TerminalReplay()
     private var programStatus = ProgramStatusObserver()
     public private(set) var ended = false
     public private(set) var pinned = false
@@ -48,7 +48,7 @@ public actor LiveTerminal {
     }
     private func publish(_ data: Data) {
         programStatus.feed(data)
-        replay.append(data); if replay.count > 262_144 { replay = Data(replay.suffix(262_144)) }
+        replay.append(data)
         for (id, client) in clients {
             if case .dropped = client.yield(data) { client.finish(); clients.removeValue(forKey: id); clientLogins.removeValue(forKey: id) }
         }
@@ -60,7 +60,7 @@ public actor LiveTerminal {
         clients[id] = continuation
         clientLogins[id] = login
         continuation.onTermination = { _ in Task { await self.detach(id) } }
-        return (id, stream, replay)
+        return (id, stream, replay.snapshot)
     }
     public func detach(_ id: UUID) async {
         clients.removeValue(forKey: id)?.finish(); clientLogins.removeValue(forKey: id)

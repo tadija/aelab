@@ -7,8 +7,8 @@
 !Plugins/
 !Plugins/BuildVersion/
 !Plugins/BuildVersion/**
-!Tools/
-!Tools/build-metadata.sh
+!Scripts/
+!Scripts/build-metadata.sh
 !Sources/
 !Sources/**
 !Tests/

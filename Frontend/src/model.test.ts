@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { route, terminalName, terminalTabTitle, terminalURL, shouldCopy, prefixBytes, discoveryMatchesStatus, validTint, nameID, sourceName, hostSourceName, identifyConfig, configurationPayload, renameReferences, pluginHasSource, tmuxSessionMessage, serviceDiscoveryMessage, launchdState } from './model';
+import { route, terminalName, terminalTabTitle, terminalURL, shouldCopy, prefixBytes, discoveryMatchesStatus, validTint, nameID, sourceName, hostSourceName, identifyConfig, configurationPayload, renameToolReferences, tmuxSessionMessage, serviceDiscoveryMessage, launchdState } from './model';
 describe('terminal UX boundaries', () => {
  it('requires host-aware tmux deep links', () => { expect(route('/hosts/a/projects/main/')).toMatchObject({host:'a',project:'main',terminal:true}); expect(route('/hosts/a/tty/tmux/saved/')).toMatchObject({host:'a',terminal:true,session:'saved'}); expect(route('/tty/tmux/saved/')).toMatchObject({host:undefined,terminal:false}); });
  it('preserves project/tool combinations in launch URLs', () => { const url = terminalURL({host:'b',project:'p',tool:'t',persistent:true}); expect(url).toContain('/hosts/b/tty/'); expect(url).toContain('project=p'); expect(url).toContain('tool=t'); });
@@ -31,15 +31,14 @@ it('derives URL identity only from the name', () => {
  expect(nameID('ＡＢＣ 123')).toBe('abc-123');
 });
 it('sends name-only definitions and derives every collection on read', () => {
- const config = { version: 1, paths: [], ttyButtons: [], tools: [{ name: 'Shared tool' }], plugins: [{ name: 'Shared plugin' }], hosts: [{ name: 'Dev host', projects: [{ name: 'My project' }], services: [{ name: 'Web service' }], tools: ['shared-tool'], plugins: ['shared-plugin'] }] } as unknown as Config;
+ const config = { version: 1, paths: [], ttyButtons: [], tools: [{ name: 'Shared tool' }], hosts: [{ name: 'Dev host', projects: [{ name: 'My project' }], services: [{ name: 'Web service' }], tools: ['shared-tool'] }] } as unknown as Config;
  const view = identifyConfig(config);
  expect(view.hosts[0].id).toBe('dev-host'); expect(view.tools[0].id).toBe('shared-tool');
  expect(view.hosts[0].projects[0].id).toBe('my-project'); expect(view.hosts[0].services[0].id).toBe('web-service');
  expect(configurationPayload(view)).toEqual(config);
- renameReferences(view, 'tools', 'shared-tool', 'new-tool');
- renameReferences(view, 'plugins', 'shared-plugin', 'new-plugin');
- renameReferences(view, 'tools', 'new-tool', 'final-tool');
- expect(view.hosts[0].tools).toEqual(['final-tool']); expect(view.hosts[0].plugins).toEqual(['new-plugin']);
+ renameToolReferences(view, 'shared-tool', 'new-tool');
+ renameToolReferences(view, 'new-tool', 'final-tool');
+ expect(view.hosts[0].tools).toEqual(['final-tool']);
 });
 
 import { enabledTools, type Config, type Host } from './model';
@@ -51,7 +50,7 @@ it('selects centralized tools by enabled host IDs without copying definitions', 
 });
 
 import { statusTone } from './model';
-it('uses semantic plugin status colors independently of host tint', () => {
+it('uses semantic status colors independently of host tint', () => {
  expect(statusTone('ok')).toBe('success'); expect(statusTone('warning')).toBe('warning');
  expect(statusTone('critical')).toBe('error'); expect(statusTone('unknown')).toBe('neutral');
 });
@@ -71,13 +70,6 @@ it('preserves literal standalone YOLO working directories in terminal links', ()
   expect(url.searchParams.has('persistent')).toBe(false);
 });
 
-it('recognizes only explicit supported plugin source paths for deployment', () => {
- const plugin = { id:'probe', name:'Probe', executable:'ruby', arguments:['~/.aelab/plugins/probe.rb'] };
- expect(pluginHasSource(plugin)).toBe(true);
- expect(pluginHasSource({ ...plugin, executable:'~/.aelab/plugins/probe.sh', arguments:[] })).toBe(true);
- expect(pluginHasSource({ ...plugin, arguments:['relative/probe.rb'] })).toBe(false);
- expect(pluginHasSource({ ...plugin, arguments:['--arbitrary'] })).toBe(false);
-});
 
 it('labels empty tmux servers without hiding permission, installation or SSH failures', () => {
  const result = { status:1, output:'', error:'error connecting to /private/tmp/tmux-502/default (No such file or directory)\n', truncated:false };

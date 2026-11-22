@@ -17,7 +17,6 @@ struct HostsAPI: Sendable {
     }
 
     func register(on router: Router<BasicRequestContext>) {
-        let sources = PluginSources(store: store)
         router.patch("/api/hosts/{host}/tmux/sessions/{session}") { request, context in
             await handle(request, mutation: true) { _ in
                 struct Rename: Decodable { let name: String }
@@ -42,37 +41,6 @@ struct HostsAPI: Sendable {
                 return try json(await operations.directories(host: context.parameters.get("host")!, path: path))
             }
         }
-        router.get("/api/hosts/{host}/plugins/{plugin}/source/deployment") { request, context in
-            await handle(request) { _ in
-                guard let source = request.uri.queryParameters["from"].map(String.init) else { throw AEError("A local source host is required") }
-                return try json(await sources.deployment(host: context.parameters.get("host")!, plugin: context.parameters.get("plugin")!, from: source))
-            }
-        }
-        router.post("/api/hosts/{host}/plugins/{plugin}/source/deployment") { request, context in
-            await handle(request, mutation: true) { _ in
-                let plan = try await decode(PluginDeployment.self, request)
-                _ = try await sources.deploy(host: context.parameters.get("host")!, plugin: context.parameters.get("plugin")!, plan: plan)
-                return try json(["ok": true])
-            }
-        }
-        router.get("/api/hosts/{host}/plugins/{plugin}/source") { request, context in
-            await handle(request) { _ in
-                return try json(await sources.read(host: context.parameters.get("host")!, plugin: context.parameters.get("plugin")!))
-            }
-        }
-        router.post("/api/hosts/{host}/plugins/{plugin}/source/validation") { request, context in
-            await handle(request, mutation: true) { _ in
-                let document = try await decode(ConfigDocument.self, request)
-                _ = try await sources.edit(host: context.parameters.get("host")!, plugin: context.parameters.get("plugin")!, document: document, save: false)
-                return try json(["valid": true])
-            }
-        }
-        router.put("/api/hosts/{host}/plugins/{plugin}/source") { request, context in
-            await handle(request, mutation: true) { _ in
-                let document = try await decode(ConfigDocument.self, request)
-                return try json(await sources.edit(host: context.parameters.get("host")!, plugin: context.parameters.get("plugin")!, document: document, save: true))
-            }
-        }
         router.post("/api/hosts/{host}/projects") { request, context in
             await handle(request, mutation: true) { _ in
                 let project = try await decode(Project.self, request)
@@ -88,16 +56,6 @@ struct HostsAPI: Sendable {
         router.post("/api/hosts/{host}/tools") { request, context in
             await handle(request, mutation: true) { _ in
                 return try json(await operations.discoverTools(context.parameters.get("host")!, refresh: true))
-            }
-        }
-        router.get("/api/hosts/{host}/plugins") { request, context in
-            await handle(request) { _ in
-                return try json(await operations.discoverPlugins(host: context.parameters.get("host")!))
-            }
-        }
-        router.post("/api/hosts/{host}/plugins/{plugin}/runs") { request, context in
-            await handle(request, mutation: true) { _ in
-                return try json(await operations.probePlugin(host: context.parameters.get("host")!, plugin: context.parameters.get("plugin")!))
             }
         }
         router.get("/api/hosts/{host}/status") { request, context in

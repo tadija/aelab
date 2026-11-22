@@ -4,7 +4,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 if { [ "${1:-}" = --version ] || [ "${1:-}" = --build ]; } && [ "$#" -eq 1 ]; then
-  exec /bin/sh "$root/Tools/build-metadata.sh" "$1"
+  exec /bin/sh "$root/Scripts/build-metadata.sh" "$1"
 fi
 
 if [ "${1:-}" = "--home" ] && { [ "${3:-}" = server ] || [ "${3:-}" = daemon ]; } && [ "${4:-}" != pair ] && [ "${4:-}" != pairing ]; then
@@ -54,7 +54,7 @@ case "${1:-}" in
       # No dashboard or Node needed on a daemon-only host.
       (cd "$root" && swift build -c "$build_configuration" --product aelab)
     else
-      (cd "$root" && python3 Scripts/generate-api.py && swift build -c "$build_configuration" && if [ "$clean" = true ]; then python3 Tools/build-frontend.py --configuration "$build_configuration" --clean; else python3 Tools/build-frontend.py --configuration "$build_configuration"; fi)
+      (cd "$root" && python3 Scripts/generate-api.py && swift build -c "$build_configuration" && if [ "$clean" = true ]; then python3 Scripts/build-frontend.py --configuration "$build_configuration" --clean; else python3 Scripts/build-frontend.py --configuration "$build_configuration"; fi)
     fi
     if [ "$operation" = server ]; then export AELAB_PUBLIC="${AELAB_PUBLIC:-$root/Frontend/dist}"; fi
     # Remove the wrapper-only build flag, retaining caller-relative paths and flag arguments.

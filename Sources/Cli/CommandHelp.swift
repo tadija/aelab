@@ -16,8 +16,6 @@ enum CommandHelp {
       services HOST             Discover services
       tmux HOST                 List tmux sessions
       tools HOST                Discover tools
-      plugins HOST              List enabled plugins
-      probe HOST PLUGIN         Run a plugin
       doctor                    Check configuration and connections
 
     Manage
@@ -113,8 +111,6 @@ enum CommandHelp {
         "services": "Usage: aelab services HOST\n\nDiscover services on a host.",
         "tmux": "Usage: aelab tmux HOST\n\nList tmux sessions on a host.",
         "tools": "Usage: aelab tools HOST\n\nDiscover tools on a host.",
-        "plugins": "Usage: aelab plugins HOST\n\nList enabled plugins on a host.",
-        "probe": "Usage: aelab probe HOST PLUGIN\n\nRun a plugin and show its result.",
         "doctor": "Usage: aelab doctor\n\nCheck configuration and connections to configured hosts.",
     ]
 

@@ -6,7 +6,7 @@ import PackagePlugin
         // Git HEAD can change independently of package sources, including across worktrees.
         // The script preserves the generated file when metadata has not changed.
         return [.prebuildCommand(displayName: "Embed aelab version and build", executable: URL(fileURLWithPath: "/bin/sh"),
-                                 arguments: [context.package.directoryURL.appendingPathComponent("Tools/build-metadata.sh").path, "--generate", context.pluginWorkDirectoryURL.path],
+                                 arguments: [context.package.directoryURL.appendingPathComponent("Scripts/build-metadata.sh").path, "--generate", context.pluginWorkDirectoryURL.path],
                                  outputFilesDirectory: context.pluginWorkDirectoryURL)]
     }
 }

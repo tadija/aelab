@@ -1,12 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { jsonFolds, jsonLines, codeTokens, codeLines } from './json';
-  let { value = $bindable(''), disabled = false, language = 'json', wrap = false, label = 'Main configuration JSON' }: { value?: string; disabled?: boolean; language?: string; wrap?: boolean; label?: string } = $props();
+  import { jsonFolds, jsonLines, jsonTokens } from './json';
+  let { value = $bindable(''), disabled = false, wrap = false, label = 'Main configuration JSON' }: { value?: string; disabled?: boolean; wrap?: boolean; label?: string } = $props();
   let backdrop = $state<HTMLPreElement>(); let gutter = $state<HTMLDivElement>(); let input = $state<HTMLTextAreaElement>();
   let lineHeights = $state<number[]>([]);
-  const highlighted = $derived(codeLines(value, language));
+  const highlighted = $derived(value.split('\n').map(jsonTokens));
   let collapsed = $state<number[]>([]);
-  const ranges = $derived(language === 'json' ? jsonFolds(value) : []);
+  const ranges = $derived(jsonFolds(value));
   const ends = $derived(new Map(ranges.map(range => [range.start, range.end])));
   const rows = $derived(jsonLines(value, ranges, collapsed));
   $effect(() => { void value; collapsed = []; });
@@ -18,7 +18,7 @@
     backdrop.scrollTop = input.scrollTop; backdrop.scrollLeft = input.scrollLeft;
     if (gutter) gutter.scrollTop = input.scrollTop;
   }
-  $effect(() => { void value; void wrap; void language; void measure(); });
+  $effect(() => { void value; void wrap; void measure(); });
   $effect(() => {
     if (!input) return;
     const observer = new ResizeObserver(() => { void measure(); }); observer.observe(input);
@@ -33,7 +33,7 @@
 <div class="json-editor" class:wrapping={wrap}>
   {#if collapsed.length}
     <div class="folded-preview" role="region" aria-label="Folded configuration preview">
-      {#each rows as row}<div class="json-code-line"><div class="folded-number"><span>{row.number + 1}</span>{@render foldButton(row.number)}</div><code>{#each codeTokens(row.text, language) as token}<span class={token.kind}>{token.text}</span>{/each}</code></div>{/each}
+      {#each rows as row}<div class="json-code-line"><div class="folded-number"><span>{row.number + 1}</span>{@render foldButton(row.number)}</div><code>{#each jsonTokens(row.text) as token}<span class={token.kind}>{token.text}</span>{/each}</code></div>{/each}
     </div>
   {:else}
     <div class="json-gutter" bind:this={gutter}>{#each rows as row}<div style:height={`${lineHeights[row.number] ?? 20.15}px`}><span>{row.number + 1}</span>{@render foldButton(row.number)}</div>{/each}</div>

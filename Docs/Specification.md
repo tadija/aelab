@@ -13,19 +13,19 @@ aelab is a self-hosted web interface and CLI for a personal lab. Manage local, S
 - Local, SSH and daemon transports share operational adapters, authorization, validation, limits and auditing. Never elevate privileges implicitly.
 - SSH uses noninteractive key/SSH agent authentication and strict known-host verification, without agent forwarding. Use the configured destination, never the display name or derived ID, for SSH commands and terminals. Respect approved OpenSSH configuration and keys.
 
-Scope is host operations and interactive terminals, not a general monitoring, deployment, Git-hosting or CI/CD platform. No plugin marketplace, arbitrary frontend injection, federation, self-update protocol, cross-platform builder or automatic rollback.
+Scope is host operations and interactive terminals, not a general monitoring, deployment, Git-hosting or CI/CD platform. No arbitrary frontend injection, federation, self-update protocol, cross-platform builder or automatic rollback.
 
 ## Configuration
 
-The source of truth is `$AELAB_HOME/config/aelab.json`, schema `version: 1`. Root collections are `hosts`, `tools`, `plugins`, `paths` and `ttyButtons`. Tools/plugins are defined once centrally. Hosts own projects/services and hold `tools`/`plugins` arrays of enabled IDs. Empty collections may be omitted. Reject unknown configuration keys, invalid references and unsupported versions; ship no compatibility aliases or automatic migrations.
+The source of truth is `$AELAB_HOME/config/aelab.json`, schema `version: 1`. Root collections are `hosts`, `tools`, `paths` and `ttyButtons`. Tools are defined once centrally. Hosts own projects/services and hold `tools` arrays of enabled IDs. Empty collections may be omitted. Reject unknown configuration keys, invalid references and unsupported versions; ship no compatibility aliases or automatic migrations.
 
 - Hosts: name, transport, SSH destination/port where applicable and optional tint/background. Local hosts omit destination/port. New homes include an explicit local localhost host.
 - Shared `paths`: up to 64 unique absolute directories, prepended literally to inherited PATH on every host for discovery, operations and terminals. Reject colons/control characters; never evaluate shell expressions. Set Homebrew paths first.
 - Projects: name, absolute path under `dir`, optional stable tmux session.
 - Services: name, provider (`systemd`, `launchd`, `docker`, `compose`), native target, with no terminal project/tool references. Compose adds absolute directory/files/environment-file paths; systemd may explicitly select user units or `sudo -n` for lifecycle actions.
 - Tools: name, executable, argument array, optional ALT and YOLO argument presets, and directory. Treat configured commands as trusted administrator input.
-- Discovery checks every central tool definition without running its executable. Keep separate presets even when they resolve to the same file. Per-host enablement never copies or edits definitions. Disabling prevents direct API/CLI launches as well as hiding project/menu shortcuts. Plugin availability checks interpreter/executable and configured script files without running probes.
-- Persist only names for hosts, projects, services, tools and plugins. Derive URL IDs by Unicode compatibility decomposition, removing combining marks, lowercasing and joining ASCII letters/digits with hyphens. Require 1–64 URL characters and reject collisions within each collection; order never affects IDs. Renaming changes URLs. Forms update enabled selections in the same revision-checked save; direct file edits must update references too. Preserve configured paths and native tmux session names. A uniquely matched dashboard host rename with unchanged execution connection preserves owned pins and pending tickets; file saves also preserve section state; ambiguous or changed connections never transfer terminals. Browser theme/tint preferences follow form renames.
+- Discovery checks every central tool definition without running its executable. Keep separate presets even when they resolve to the same file. Per-host enablement never copies or edits definitions. Disabling prevents direct API/CLI launches as well as hiding project/menu shortcuts.
+- Persist only names for hosts, projects, services, tools. Derive URL IDs by Unicode compatibility decomposition, removing combining marks, lowercasing and joining ASCII letters/digits with hyphens. Require 1–64 URL characters and reject collisions within each collection; order never affects IDs. Renaming changes URLs. Forms update enabled selections in the same revision-checked save; direct file edits must update references too. Preserve configured paths and native tmux session names. A uniquely matched dashboard host rename with unchanged execution connection preserves owned pins and pending tickets; file saves also preserve section state; ambiguous or changed connections never transfer terminals. Browser theme/tint preferences follow form renames.
 - Validate syntax, structure, IDs, paths, colors and references. Bound configuration size and entity counts.
 - Forms, CLI and the file editor share atomic revision-checked writes. Refuse stale saves; preserve credentials and unrelated files.
 
@@ -39,7 +39,7 @@ On login, place the aelab brand and “central host instance” label on a singl
 
 Use the established warm light/dark design, system UI fonts and SF Mono/Menlo terminal stack. Host tint and theme are remembered per host; terminal backgrounds are separate preferences. Overview tint matches the disabled gray tint button. Selected host names are bold white; unselected names are gray.
 
-Use a double-circle tint control (20px outer diameter, 3px ring, 6px inner dot). Keep icons consistent, keyboard accessible and labeled/tooltipped, with one checkmark for enablement and pinning. Tool/plugin controls share the neutral styling of project/service actions. Titles use 1.2rem, subtitles calc(.97rem - 1pt), and project tool buttons .92rem, with monospaced path/count chips. Service action labels are 1pt smaller with padding that keeps actions on one row in two-column cards.
+Use a double-circle tint control (20px outer diameter, 3px ring, 6px inner dot). Keep icons consistent, keyboard accessible and labeled/tooltipped, with one checkmark for enablement and pinning. Tool controls share the neutral styling of project/service actions. Titles use 1.2rem, subtitles calc(.97rem - 1pt), and project tool buttons .92rem, with monospaced path/count chips. Service action labels are 1pt smaller with padding that keeps actions on one row in two-column cards.
 
 Place the selected host controls after the aelab brand, left-aligned with a small gap and separator, keeping theme/settings/sign-out actions at the right: detected platform (macos/linux/wsl), hostname button opening the host editor, then +. On narrow screens, place the host controls on a left-aligned second row. Leave one line of spacing before the Hosts row. Align the Hosts picker label to the leading edge. The menu offers Shell, explicit tmux, then configured YOLO tools. New host shells and tmux sessions start in the selected host user’s home directory. Close it on outside tap/click or Escape.
 
@@ -47,7 +47,7 @@ The host picker begins with `all`, followed by host names and add-host. Overview
 
 ### Host status and shells
 
-Check host status immediately on entering All; keep the previous reachability label visible during refreshes, showing checking only before the first result. Prevent concurrent checks for a host, and skip automatic checks within ten seconds of the last completion. Retain the fifteen-second visible-page polling interval and allow explicit refresh regardless of result age; disable the overview refresh button while checks are active. Overview refreshes omit tool/plugin inventories.
+Check host status immediately on entering All; keep the previous reachability label visible during refreshes, showing checking only before the first result. Prevent concurrent checks for a host, and skip automatic checks within ten seconds of the last completion. Retain the fifteen-second visible-page polling interval and allow explicit refresh regardless of result age; disable the overview refresh button while checks are active. Overview refreshes omit tool inventories.
 
 Integrate Shells below the host picker, using the same panel background and small muted labels. The aligned chevron, active host button and row background toggle the panel; other host buttons select their host. Use the hostname menu for new shells, with no separate Shells + action or collapse control. Keep empty messages aligned with the panel heading. Show “No active tmux sessions” for an empty/missing server, while preserving permission, missing-executable and connection errors.
 
@@ -55,9 +55,9 @@ Tmux cards show the session name, a blue TMUX badge on the subtitle line, window
 
 All shows Hosts followed by a collapsible Shells section with the administrator’s pins across configured hosts. Reuse host shell cards, replacing PINNED with a host-tinted badge linking to that host. Reconnect/delete through each card’s host. Apply the pin refresh policy to every host on entry, focus, terminal events and visible two-second polling. All assigns unique sequential shortcuts across the combined list; individual host views retain native pin numbers. No extra session storage is needed.
 
-### Projects, tools and plugins
+### Projects and tools
 
-The main sections are Projects, Tools, Plugins and Services, in that order. Project titles attach to their configured tmux session, creating it in the project directory if absent; otherwise they open a temporary native shell. Native tool and YOLO launches start pinned, from project buttons or standalone tool cards.
+The main sections are Projects, Tools and Services, in that order. Project titles attach to their configured tmux session, creating it in the project directory if absent; otherwise they open a temporary native shell. Native tool and YOLO launches start pinned, from project buttons or standalone tool cards.
 
 Project cards have a title/actions row, a path/branch metadata row, and a footer with tool buttons and the trailing drag handle. Omit redundant shell/tmux buttons. Place the per-project YOLO toggle immediately before Edit; it filters to approved YOLO tools and launches their bypass preset without confirmation. Tool card actions are YOLO, Edit and the rightmost host toggle or local Delete; omit tmux actions. Standalone directory selection and ALT/YOLO arguments are defined under Terminals.
 
@@ -65,13 +65,11 @@ Pinned-shell, project and tool paths show their last two components by default. 
 
 Refresh Git branches with host status through the selected transport, using read-only metadata and a short timeout. Omit branch badges for non-repositories, detached HEAD or unavailable Git. Preserve branch case and full-name tooltips. Project creation explicitly ensures the directory exists, reporting native permission failures without sudo.
 
-Plugin rows show “Run on demand” until a result is available. Each plugin row has Script, Edit definition and a rightmost enable/disable or local-only Delete icon. Group Script with edit and delete controls on the right, aligning actions with the title’s top edge and wrapping controls or titles when needed in grid cards. Script opens that row's configured source directly, without a file picker; disable it when no readable supported source exists on the selected host. Plugin titles run the probe directly; omit separate Run buttons.
-
 ### Discovery and configuration updates
 
 Tool availability comes only from the cached tool inventory, not periodic host status probes.
 
-Tools and Plugins default to enabled definitions; the filter beside + reveals all central definitions, availability badges and per-host checkmarks. New definitions stay disabled. The UI enables only available entries; the backend validates enablement and executable/path availability on every launch. Refresh appears beside the filter only in discovery mode. Tools use a five-minute inventory cache; plugin availability refresh never runs probes. Omit checked/cache footers and automatic installation.
+Tools default to enabled definitions; the filter beside + reveals all central definitions, availability badges and per-host checkmarks. New definitions stay disabled. The UI enables only available entries; the backend validates enablement and executable/path availability on every launch. Refresh appears beside the filter only in discovery mode. Tools use a five-minute inventory cache. Omit checked/cache footers and automatic installation.
 
 In enabled rows, the rightmost × deletes a shared definition from all hosts only on an explicit local host, with confirmation; on remote hosts it disables that host’s selection. Discovery checkmarks toggle selections. Deletion clears enabled IDs; neither operation deletes files or stops programs.
 
@@ -79,9 +77,9 @@ Serialize configuration reads/writes. Apply toggle intents to the latest snapsho
 
 Services keep host-specific configured/discovered views, a native status filter defaulting to running, case-insensitive search across names/providers/states, one matching/total count, and refresh beside the active discovery filter.
 
-Installed badges on tools and plugins are hidden by default and appear in green only while that section’s discovery filter is active. Other states, including probe results and failures, retain their status colors.
+Installed badges on tools are hidden by default and appear in green only while that section’s discovery filter is active. Other states, including failures, retain their status colors.
 
-Configured hosts, projects, tools, services and plugins support trailing drag handles, keyboard arrows and upward-opening move controls. Put handles on the metadata line, or beside project tool buttons. Persist ordered revision-checked config arrays without changing IDs, links or hidden definitions. Host order is central, tool/plugin order is global, and project/service order is host-specific. Live-session and native-discovery order stays unchanged.
+Configured hosts, projects, tools, services support trailing drag handles, keyboard arrows and upward-opening move controls. Put handles on the metadata line, or beside project tool buttons. Persist ordered revision-checked config arrays without changing IDs, links or hidden definitions. Host order is central, tool order is global, and project/service order is host-specific. Live-session and native-discovery order stays unchanged.
 
 Host forms omit the configuration-only `dockerContext` without dropping it on edit. Service forms label targets per provider: systemd unit, launchd target, container name/ID or Compose project name. Service titles show the same status result as Status; edit/delete sit at top right, the state badge beside the drag handle on the subtitle line. Explain user scope and noninteractive lifecycle sudo beside their checkboxes.
 
@@ -89,9 +87,9 @@ Main sections and the host-picker shell panel can collapse. Persist expansion pe
 
 ### Layout and feedback
 
-Use dashboard cards with a 384px minimum that stretch evenly to fill each row, adding another column whenever it fits, without a maximum column count or dashboard width cap. Shrink cards to the available width on screens narrower than a card. Keep horizontal padding growing from 24px on phones to 48px on desktop. Apply this layout to hosts, shells, projects, tools, services/discovery and plugins. Keep card controls/design and DOM order. Forms, editors, directory trees and terminals retain their layouts.
+Use dashboard cards with a 384px minimum that stretch evenly to fill each row, adding another column whenever it fits, without a maximum column count or dashboard width cap. Shrink cards to the available width on screens narrower than a card. Keep horizontal padding growing from 24px on phones to 48px on desktop. Apply this layout to hosts, shells, projects, tools, services/discovery. Keep card controls/design and DOM order. Forms, editors, directory trees and terminals retain their layouts.
 
-Show a compact animated loader during initial loading, session checks, script loading and deployment; respect reduced-motion preferences.
+Show a compact animated loader during initial loading and session checks; respect reduced-motion preferences.
 
 Place uppercase semantic status badges left of the metadata-line drag handle, independently of host tint; project branch badges sit beside paths and wrap to at most two lines. Align titles/actions above them, with 16px gaps between content groups. OSC working status is yellow. Show unknown as “checking”; retain stale labels with yellow badges. Keep native errors visible, expire/refresh observations while visible, and never equate reachability or running with application health.
 
@@ -149,16 +147,6 @@ Support file drops and screenshot pastes in every browser terminal, using authen
 
 After each upload succeeds, paste one shell-quoted path as its own native paste, followed by a separate space, never Enter. Respect the application's bracketed-paste mode, bypass sticky key modifiers for file paths, and leave native attachment labels to the application. Preserve text paste and normal terminal traffic. Show a temporary drop target and upload progress/cancel control. Abort browser transfers on terminal unmount and do not paste results into a disconnected or replaced terminal. Keep bytes out of command arguments and logs; audit upload metadata only.
 
-## Plugins
-
-Plugins are trusted administrator-managed host executables, not a sandbox or remote daemon. Plugins provide on-demand probes. A central `plugins` definition contains name, executable, arguments, and timeout (default 10, range 1–30 seconds). Optional `source` identifies a file for editing/deployment; execution always uses the executable and arguments. Keep form helper text minimal. Name-derived IDs are global and change on rename. Use Plugins for configuration and explicit execution, and `aelab plugins HOST` / `aelab probe HOST PLUGIN` in the CLI. Never run plugins during discovery or background status polling.
-
-Run the approved command plus `--aelab-probe` through the shared execution transport. Pass only `AELAB_HOST_ID` and `AELAB_PLUGIN_ID` as explicit context; never send credentials/config as input. Commands inherit their selected execution identity's permissions/environment. Script/interpreter paths belong to that host; no automatic upload, install or elevation. Authors must keep probes read-only.
-
-Require zero exit and one JSON report: `version: 1`, `status` (`ok`, `warning`, `critical`, `unknown`), nonempty `summary` and `details` label/value pairs. Limit stdout reports to 64 KiB, summary to 512 bytes, details to 32 entries, labels to 128 bytes and values to 4096 bytes. Apply shared concurrency/output bounds, timeout and cancellation. Protocol/transport/exit failures remain visible and never become healthy status. Show escaped text and timestamps, never HTML or frontend code. Audit execution metadata, excluding reports, arguments and diagnostics. The probe API is authenticated and CSRF/Origin-protected; requests cannot supply executable commands or override arguments.
-
-Ship working Bash (disk usage), Ruby (process count) and Swift (system uptime) examples with setup and protocol documentation. Examples must inspect real host data without mutating host state. Disk usage preserves Linux df capacity; on macOS calculate the rounded-up unavailable share from total minus available blocks, since APFS per-volume Used omits other volumes. Include the measurement scope in report details. Interpreter execution and compiled Swift binaries are both supported. Plugins are not enabled by default. See [Plugins](../Plugins/README.md).
-
 ## Daemon transport
 
 The daemon runtime module shares Core and runs through `aelab daemon`. Hosts explicitly select `daemon` and reference private pairing state by UUID; keep credentials out of configuration/API responses. Persistent direct TLS WebSockets multiplex bounded command and PTY messages. Validate pinned certificates and endpoint hostnames; require private 256-bit tokens, refuse browser Origins and unsupported protocol versions. No SSH fallback or automatic mutation retries. Commands and terminals execute as the daemon account, through existing adapters and authorization, without implicit elevation.
@@ -169,29 +157,21 @@ Preserve daemon settings and credentials after first setup; reject conflicting e
 
 ## Authentication and safety
 
-One administrator account, salted PBKDF2 password hashing, HttpOnly/SameSite cookies, expiring sessions, exact Origin and CSRF checks for mutations. Require TLS outside loopback. Terminal tickets are short-lived, owner-bound and single-use. Reauthorize active terminal connections; cap concurrency/output and enforce timeouts/cancellation.
+One administrator account, salted PBKDF2 password hashing, HttpOnly/SameSite cookies, 30-day sessions renewed during browser activity, exact Origin and CSRF checks for mutations. Require TLS outside loopback. Terminal tickets are short-lived, owner-bound and single-use. Reauthorize active terminal connections; cap concurrency/output and enforce timeouts/cancellation.
 
 Keep config, credentials, section state and audit files private; use atomic writes. Audit configuration changes, lifecycle actions, terminal opens and tmux deletion without recording secrets or terminal contents. Local reset revokes sessions. The editor and generated API documentation require authentication.
 
-## Editors, directories and deployment
+## Configuration editor and directories
 
 ### Editors
 
-The authenticated configuration editor opens only the running instance’s main file, never credentials. Both configuration and script editors use numbered, syntax-colored monospaced text, validation, save, useful errors and confirmed discard. Reopening loads current contents; omit reload buttons. Put Close last at the right with an exit icon distinct from deletion. Folding is a read-only preview; expand before editing and preserve raw formatting. Share a browser-persisted Wrap lines preference across editors/reloads, preserving source bytes, highlighting, line numbers, folds and scroll alignment. Configuration changes affect new operations without restart; existing terminals retain their context. Environment changes require restart.
+The authenticated configuration editor opens only the running instance’s main file, never credentials. The editor uses numbered, syntax-colored monospaced text, validation, save, useful errors and confirmed discard. Reopening loads current contents; omit reload buttons. Put Close last at the right with an exit icon distinct from deletion. Folding is a read-only preview; expand before editing and preserve raw formatting. Share a browser-persisted Wrap lines preference across reloads, preserving source bytes, highlighting, line numbers, folds and scroll alignment. Configuration changes affect new operations without restart; existing terminals retain their context. Environment changes require restart.
 
-Plugin script editing is authenticated and admin-only. Open only the selected plugin’s existing configured Bash/Ruby/Swift source file on the selected host: a script executable, a whole script argument, or an explicit `source` path for compiled plugins. The editor accepts only configured files and never creates them; explicit deployment is separate. Use the same numbered, syntax-colored editor with minimal chrome; use JSON folding only for JSON. Validate scripts with bash -n, ruby -c or swiftc -frontend -parse without executing them. Limit UTF-8 source to 64 KiB, reject symlinks, preserve permissions, serialize aelab writers, compare revisions/current contents, and atomically replace files. Expose useful syntax/save/conflict errors; compiled sources still need rebuilding. Audit metadata without source contents. Keep the main configuration editor to title, filename, editor and icon controls, with errors/status only when relevant.
-
-Escape dismisses create/edit forms and the configuration/plugin source editors using their existing Cancel/Close behavior. Editors retain unsaved-change confirmation and remain open while busy; nested directory pickers close first without dismissing their parent form.
+Escape dismisses create/edit forms and the configuration editor using their existing Cancel/Close behavior. Editors retain unsaved-change confirmation and remain open while busy; nested directory pickers close first without dismissing their parent form.
 
 ### Directory picker
 
 The authenticated directory picker lists one level lazily through the existing execution transport under that identity, without sudo. Use it for project, Compose and default tool directories and standalone tool directory selection. Keep manual directory fields for new paths. Provide Home/Root/Up and expandable tree nodes, loading/errors/retry and an explicit Select directory action. Hide dot-prefixed folders by default and provide a Hidden folders toggle with a browser-persisted preference, applied at every tree depth. Clicking a folder name selects it and expands/collapses its children; show connecting tree lines and open/closed folder icons instead of separate arrow buttons. Return canonical absolute paths, include hidden directories, omit files and symlink entries, enforce a 256-directory cap and transport limits. An explicitly requested symlink path may resolve to its physical directory. Browsing is admin-only and limited to names of directories readable by the host account; no file-content browser or filesystem write endpoint.
-
-### Plugin paths and deployment
-
-Plugin executable/source paths and whole path arguments may use `~/...`, resolved from the selected host execution user’s HOME. Absolute local script paths resolve on SSH hosts to `~/.aelab/plugins/SCRIPT_NAME/FILENAME`; compiled plugins with an explicit source use the same remote directory for their absolute executable. Home-relative paths retain their configured layout. Bare PATH executable names remain supported. Reject ambiguous working-directory-relative executable/source paths and `..` in home-relative paths. Do not expand shell variables, other users’ tildes, globs or embedded argument expressions. Discovery, probes, source editing and deployment share these rules. Ship the three example definitions with home-relative script paths, disabled by default.
-
-Offer explicit configured-source deployment from a local host to a remote host. Show its button beside the plugin title only for an unavailable plugin on an SSH or daemon host; keep script editing with the right-side row actions. Load the source/target preview automatically and when the source host changes, with no separate reload button. Reopen the dialog for a fresh preview. Show whether an existing file will be replaced. POST the preview with config/source/target revisions; reject stale plans and symlink targets, use a private temporary sibling plus atomic publication, and share the source editor’s writer lock. Keep existing file permissions; create new scripts as 0700 and new directories privately. Copy at most 64 KiB from configured Bash/Ruby/Swift sources; never accept arbitrary upload content/paths, copy binaries, install interpreters, enable/run plugins or build compiled sources automatically. Audit host/plugin/outcome without script contents.
 
 ## Build and installation
 
@@ -225,15 +205,15 @@ Use resource-based URLs with direct JSON responses and no compatibility aliases.
 
 - `GET/POST/DELETE /api/auth/session`: inspect login, sign in and sign out.
 - `GET/PUT /api/config`: `{config, revision}`; `?format=source` selects `{content, revision}` for lossless editing. Both representations share revision checks. `POST /api/config/validation` checks `{content}` without saving.
-- Host resources use `/api/hosts/{host}`. `GET/POST /tools` returns cached/refreshed inventory. `GET /plugins` includes availability and optional editable-source metadata; `POST /plugins/{plugin}/runs` executes an enabled definition. `/plugins/{plugin}/source` supports GET/PUT; its `/validation` accepts a source document and returns `{valid:true}`.
+- Host resources use `/api/hosts/{host}`. `GET/POST /tools` returns cached/refreshed inventory.
 - `GET /services/{service}` reads status; `GET .../logs` reads logs; `POST .../actions` accepts `{action: "start"|"stop"|"restart"}`. No wildcard operation route.
 - `PATCH/DELETE /tmux/sessions/{session}` renames/ends a session; `POST .../windows` creates a window. `GET /terminals` lists administrator-owned pins; DELETE addresses a specific pin. `POST /terminal-tickets` accepts launch options without a host field; the URL determines the host. Replies contain `ticket`, `prefix` and optional `session`, never an empty session sentinel. Connect to `/ws/terminals/{ticket}`. Browser deep links stay independent of HTTP API paths.
-- `GET /directories?path=...` lists host directories (default home). `GET /plugins/{plugin}/source/deployment?from={localHost}` previews a script copy; POST to the same path submits that preview with revision preconditions.
+- `GET /directories?path=...` lists host directories (default home).
 - `POST /projects` prepares a supplied project directory; `/api/state/sections` reads/writes dashboard collapse state outside the main configuration.
 
 Errors use `{error: {code, message}}`: missing/expired login is `401 authentication_required`, failed login `401 login_failed`, rejected Origin `403 origin_rejected`, missing/invalid CSRF `403 csrf_required`, invalid requests `400 invalid_request`, and stale saves `409 revision_conflict`. Syntax and configuration validation always precede persistence. Terminal request bodies cannot override URL host identity; window requests cannot override the session in the URL.
 
-Maintain the explicit OpenAPI contract in `Docs/openapi.json`. Embed it with `Scripts/generate-api.py`; `--check` verifies route coverage, schema references, path parameters and synchronized output. Serve authenticated documentation at `/api/docs` and the schema at `/api/docs/openapi.json`, including request/response models, authentication, Origin/CSRF and conflict handling. Describe the terminal WebSocket protocol alongside HTTP endpoints. Generate paths and each path’s methods in alphabetical order. The reference page shares the dashboard palette stylesheet, system fonts and panel styling, with an overview-theme preference and light/dark toggle. Group host endpoints under one collapsed `/api/hosts/{host}` item, with Host & discovery, Plugins, Services and Shells subsections. Keep each operation independently expandable. Do not add a documentation framework.
+Maintain the explicit OpenAPI contract in `Docs/openapi.json`. Embed it with `Scripts/generate-api.py`; `--check` verifies route coverage, schema references, path parameters and synchronized output. Serve authenticated documentation at `/api/docs` and the schema at `/api/docs/openapi.json`, including request/response models, authentication, Origin/CSRF and conflict handling. Describe the terminal WebSocket protocol alongside HTTP endpoints. Generate paths and each path’s methods in alphabetical order. The reference page shares the dashboard palette stylesheet, system fonts and panel styling, with an overview-theme preference and light/dark toggle. Group host endpoints under one collapsed `/api/hosts/{host}` item, with Host & discovery, Services and Shells subsections. Keep each operation independently expandable. Do not add a documentation framework.
 
 ## Matrix rain
 

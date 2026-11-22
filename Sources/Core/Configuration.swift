@@ -30,20 +30,18 @@ public struct Host: Codable, Sendable, Identifiable {
     public var projects: [Project] = []
     public var services: [Service] = []
     public var tools: [String] = []
-    public var plugins: [String] = []
     public init(name: String, destination: String = "", port: Int? = nil, transport: HostTransport? = nil) {
         self.name = name; self.destination = destination; self.port = port; self.transport = transport
     }
-    enum CodingKeys: String, CodingKey, CaseIterable { case name, destination, transport, daemon, port, background, tint, projects, services, tools, plugins, dockerContext }
+    enum CodingKeys: String, CodingKey, CaseIterable { case name, destination, transport, daemon, port, background, tint, projects, services, tools, dockerContext }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let unknown = Set(try decoder.container(keyedBy: ConfigurationKey.self).allKeys.map(\.stringValue)).subtracting(CodingKeys.allCases.map(\.rawValue))
+        let unknown = Set(try decoder.container(keyedBy: ConfigurationKey.self).allKeys.map(\.stringValue)).subtracting(CodingKeys.allCases.map(\.rawValue)).subtracting(["plugins"])
         guard unknown.isEmpty else { throw AEError("Unknown host keys: \(unknown.sorted().joined(separator: ", "))") }
         name = try c.decode(String.self, forKey: .name)
         projects = try c.decodeIfPresent([Project].self, forKey: .projects) ?? []
         services = try c.decodeIfPresent([Service].self, forKey: .services) ?? []
         tools = try c.decodeIfPresent([String].self, forKey: .tools) ?? []
-        plugins = try c.decodeIfPresent([String].self, forKey: .plugins) ?? []
         destination = try c.decodeIfPresent(String.self, forKey: .destination) ?? ""
         daemon = try c.decodeIfPresent(String.self, forKey: .daemon)
         transport = try c.decodeIfPresent(HostTransport.self, forKey: .transport)
@@ -53,7 +51,6 @@ public struct Host: Codable, Sendable, Identifiable {
     }
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(plugins, forKey: .plugins)
         try c.encode(projects, forKey: .projects); try c.encode(services, forKey: .services); try c.encode(tools, forKey: .tools)
         try c.encode(name, forKey: .name)
         try c.encodeIfPresent(destination.isEmpty ? nil : destination, forKey: .destination)
@@ -114,20 +111,18 @@ public struct Configuration: Codable, Sendable {
     public var version: Int = 1
     public var ttyButtons: [TTYButton] = []
     public var tools: [Tool] = []
-    public var plugins: [Plugin] = []
     public var paths: [String] = []
     public var hosts: [Host] = []
     public init() {}
-    enum CodingKeys: String, CodingKey, CaseIterable { case version, tools, plugins, paths, hosts, ttyButtons }
+    enum CodingKeys: String, CodingKey, CaseIterable { case version, tools, paths, hosts, ttyButtons }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(Int.self, forKey: .version)
         guard version == 1 else { throw AEError("Unsupported configuration version; expected 1") }
         let keys = Set(try decoder.container(keyedBy: ConfigurationKey.self).allKeys.map(\.stringValue))
-        let unknown = keys.subtracting(CodingKeys.allCases.map(\.rawValue))
+        let unknown = keys.subtracting(CodingKeys.allCases.map(\.rawValue)).subtracting(["plugins"])
         guard unknown.isEmpty else { throw AEError("Unknown configuration keys: \(unknown.sorted().joined(separator: ", "))") }
         tools = try c.decodeIfPresent([Tool].self, forKey: .tools) ?? []
-        plugins = try c.decodeIfPresent([Plugin].self, forKey: .plugins) ?? []
         paths = try c.decodeIfPresent([String].self, forKey: .paths) ?? []
         ttyButtons = try c.decodeIfPresent([TTYButton].self, forKey: .ttyButtons) ?? []
         hosts = try c.decode([Host].self, forKey: .hosts)
@@ -137,7 +132,6 @@ public struct Configuration: Codable, Sendable {
         host.executionPaths = paths; return host
     }
     public func enabledTools(_ host: Host) -> [Tool] { tools.filter { host.tools.contains($0.id) } }
-    public func enabledPlugins(_ host: Host) -> [Plugin] { plugins.filter { host.plugins.contains($0.id) } }
     /// Only transfer retained terminal context when the host itself is unchanged.
     public func renamedHosts(to updated: Configuration) -> [String: String] {
         let removed = hosts.filter { old in !updated.hosts.contains { $0.id == old.id } }
@@ -156,18 +150,17 @@ public struct Configuration: Codable, Sendable {
         guard ttyButtons.count <= 64, Set(ttyButtons.map(\.key)).count == ttyButtons.count,
               ttyButtons.allSatisfy({ TTYButton.supports($0.key) && !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.label.count <= 40 && !$0.label.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) }) else { throw AEError("Invalid ttyButtons: use unique supported keys and labels of 1–40 characters (maximum 64 buttons)") }
 
-        guard hosts.count <= 64, hosts.reduce(0, { $0 + $1.projects.count }) <= 512, hosts.reduce(0, { $0 + $1.services.count }) <= 512, tools.count <= 256, plugins.count <= 256 else { throw AEError("Configuration entry limit exceeded") }
+        guard hosts.count <= 64, hosts.reduce(0, { $0 + $1.projects.count }) <= 512, hosts.reduce(0, { $0 + $1.services.count }) <= 512, tools.count <= 256 else { throw AEError("Configuration entry limit exceeded") }
         guard version == 1 else { throw AEError("Unsupported config version") }
         func ids(_ values: [String]) throws {
             guard Set(values).count == values.count else { throw AEError("Names must produce unique URL identifiers within each collection") }; guard values.allSatisfy(validID) else { throw AEError("Names must contain a letter or number and produce an identifier of at most 64 characters") }
         }
-        try ids(hosts.map(\.id)); try ids(tools.map(\.id)); try ids(plugins.map(\.id))
+        try ids(hosts.map(\.id)); try ids(tools.map(\.id))
         guard paths.count <= 64, Set(paths).count == paths.count else { throw AEError("paths must contain at most 64 unique directories") }
         for directory in paths {
             try absolutePath(directory)
             guard !directory.contains(":"), !directory.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { throw AEError("paths must not contain colons or control characters") }
         }
-        for plugin in plugins { try plugin.validate() }
         for t in tools {
             if let directory = t.directory { try absolutePath(directory) }
             guard !t.name.isEmpty, !t.executable.isEmpty, !t.executable.hasPrefix("-"), !t.executable.contains("\0"), !t.executable.contains("\n"), t.executable.utf8.count <= 4096, t.arguments.count <= 64, (t.yoloArguments?.count ?? 0) <= 64, (t.altArguments?.count ?? 0) <= 64,
@@ -184,8 +177,8 @@ public struct Configuration: Codable, Sendable {
                 guard !h.destination.isEmpty, !h.destination.hasPrefix("-"), h.destination.range(of: "^[A-Za-z0-9_.@:\\[\\]-]+$", options: .regularExpression) != nil,
                       h.port == nil || (1...65535).contains(h.port!) else { throw AEError("Invalid SSH host \(h.id)") }
             }
-            try ids(h.tools); try ids(h.plugins)
-            guard h.tools.allSatisfy({ id in tools.contains { $0.id == id } }), h.plugins.allSatisfy({ id in plugins.contains { $0.id == id } }) else { throw AEError("Unknown enabled tool or plugin on \(h.id)") }
+            try ids(h.tools)
+            guard h.tools.allSatisfy({ id in tools.contains { $0.id == id } }) else { throw AEError("Unknown enabled tool on \(h.id)") }
             if let context = h.dockerContext { try ServiceCommands.validateDockerContext(context) }
             let projects = h.projects, services = h.services
             try ids(projects.map(\.id)); try ids(services.map(\.id))
@@ -328,7 +321,7 @@ public actor ConfigStore {
         _ = try Self.validateDocument(document.content)
         try commit(Data(document.content.utf8), expected: document.revision)
     }
-    private static let sectionKeys = Set(["hosts", "shells", "projects", "services", "tools", "plugins"])
+    private static let sectionKeys = Set(["hosts", "shells", "projects", "services", "tools"])
     public func sectionState() throws -> [String: [String: Bool]] {
         let url = home.appendingPathComponent("state/sections.json")
         guard FileManager.default.fileExists(atPath: url.path) else { return [:] }

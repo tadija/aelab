@@ -8,9 +8,18 @@ struct AuthAPI: Sendable {
     let insecure: Bool
     let cookiePath: String
 
+    private func sessionResponse(_ session: LoginSession) throws -> Response {
+        var response = try json(["csrf": session.csrf, "version": AelabVersion.current, "build": AelabVersion.build])
+        response.headers[.setCookie] = "aelab=\(session.token); Path=\(cookiePath); HttpOnly; SameSite=Strict; Max-Age=\(Authentication.lifetimeSeconds)" + (insecure ? "" : "; Secure")
+        return response
+    }
+
     func register(on router: Router<BasicRequestContext>) {
         router.get("/api/auth/session") { request, _ in
-            do { let session = try await authorize(request, auth: auth, origin: origin); return try json(["csrf": session.csrf, "version": AelabVersion.current, "build": AelabVersion.build]) }
+            let session: LoginSession
+            do { session = try await auth.renew(token: cookie(request)) }
+            catch { return failure(APIError(status: .unauthorized, code: "authentication_required", message: "Authentication required")) }
+            do { return try sessionResponse(session) }
             catch { return failure(error) }
         }
         router.post("/api/auth/session") { request, _ in
@@ -21,9 +30,7 @@ struct AuthAPI: Sendable {
                 let session: LoginSession
                 do { session = try await auth.login(body.password) }
                 catch { throw APIError(status: .unauthorized, code: "login_failed", message: "Login failed or rate limited") }
-                var response = try json(["csrf": session.csrf, "version": AelabVersion.current, "build": AelabVersion.build])
-                response.headers[.setCookie] = "aelab=\(session.token); Path=\(cookiePath); HttpOnly; SameSite=Strict; Max-Age=43200" + (insecure ? "" : "; Secure")
-                return response
+                return try sessionResponse(session)
             } catch { return failure(error) }
         }
         router.post("/api/auth/session/verify") { request, _ in
