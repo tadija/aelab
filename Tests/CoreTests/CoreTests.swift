@@ -146,29 +146,6 @@ import Glibc
 #else
 import Darwin
 #endif
-import CPTY
-
-@Test func nativePTYUnblocksSignalsAndResizes() throws {
-    var blocked = sigset_t(); sigemptyset(&blocked); sigaddset(&blocked, SIGWINCH)
-    var previous = sigset_t(); _ = pthread_sigmask(SIG_BLOCK, &blocked, &previous)
-    defer { _ = pthread_sigmask(SIG_SETMASK, &previous, nil) }
-    let args = ["/bin/sh", "-c", "trap 'stty size; exit' WINCH; printf READY; while :; do sleep 0.05; done"]
-    let pointers = args.map { strdup($0) }; defer { pointers.forEach { free($0) } }
-    var argv = pointers + [nil]; var fd: Int32 = -1
-    let pid = argv.withUnsafeMutableBufferPointer { ae_spawn_pty("/bin/sh", $0.baseAddress, &fd) }
-    #expect(pid > 0); guard pid > 0 else { return }
-    defer { _ = kill(-pid, SIGTERM); _ = close(fd); var status: Int32 = 0; _ = waitpid(pid, &status, 0) }
-    func receive() -> String {
-        var descriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-        guard poll(&descriptor, 1, 2000) > 0 else { return "" }
-        var bytes = [UInt8](repeating: 0, count: 4096)
-        let count = read(fd, &bytes, bytes.count)
-        return count > 0 ? String(decoding: bytes.prefix(count), as: UTF8.self) : ""
-    }
-    #expect(receive().contains("READY"))
-    #expect(ae_resize_pty(fd, 101, 31) == 0); _ = kill(pid, SIGWINCH)
-    #expect(receive().contains("31 101"))
-}
 
 @Test func deploymentInitializationSeedsLocalhostAndPreservesState() async throws {
     let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -195,23 +172,6 @@ import CPTY
     let invalid = Data("invalid config".utf8); try invalid.write(to: path)
     await #expect(throws: (any Error).self) { try await store.initializeIfNeeded() }
     #expect(try Data(contentsOf: path) == invalid)
-}
-
-@Test func nativePTYStartsWithNormalOutputProcessing() throws {
-    let args = ["/bin/sh", "-c", "printf 'NORMAL_ONE\\nNORMAL_TWO\\n'"]
-    let pointers = args.map { strdup($0) }; defer { pointers.forEach { free($0) } }
-    var argv = pointers + [nil]; var fd: Int32 = -1
-    let pid = argv.withUnsafeMutableBufferPointer { ae_spawn_pty("/bin/sh", $0.baseAddress, &fd) }
-    #expect(pid > 0); guard pid > 0 else { return }
-    defer { _ = close(fd); var status: Int32 = 0; _ = waitpid(pid, &status, 0) }
-    var output = Data()
-    var descriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-    while poll(&descriptor, 1, 2000) > 0 {
-        var bytes = [UInt8](repeating: 0, count: 4096)
-        let count = read(fd, &bytes, bytes.count); if count <= 0 { break }
-        output.append(contentsOf: bytes.prefix(count))
-    }
-    #expect(String(decoding: output, as: UTF8.self).contains("NORMAL_ONE\r\nNORMAL_TWO\r\n"))
 }
 
 @Test func hostTintConfigurationRoundTripAndValidation() throws {

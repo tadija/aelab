@@ -109,7 +109,7 @@ Completed files remain available across tab closure, pinning, tmux and server re
 
 ## Version
 
-`aelab --version` prints the release and a short commit ID, such as `0.2.0 (abc123d)`. Use `--build` for the full commit hash. Both flags also work with `./.ae` without building. The dashboard footer shows the server's release and build; hover for the full hash.
+`aelab --version` prints the release and a short commit ID, such as `0.2.1 (abc123d)`. Use `--build` for the full commit hash. Both flags also work with `./.ae` without building. The dashboard footer shows the server's release and build; hover for the full hash.
 
 To prepare a release, edit root `VERSION`, rebuild/install, and tag it as `vX.Y.Z`. Builds embed VERSION and the checkout's Git HEAD, including direct `swift build` builds. Installed programs never need Git or the checkout. Configuration-schema and daemon-protocol versions are separate.
 

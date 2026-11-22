@@ -71,7 +71,8 @@ private func terminal(owner: String = "owner", host: String = "local", script: S
 
 @Test func hostRenamePreservesOwnedPinsAndPendingTickets() async throws {
     let registry = TerminalRegistry(); let live = try terminal()
-    try await registry.register(live); let (subscription, _, _) = try await live.subscribe()
+    try await registry.register(live); let (subscription, stream, _) = try await live.subscribe()
+    defer { withExtendedLifetime(stream) {} }
     try await registry.setPinned(live, value: true)
     let ticket = try await registry.issue(TerminalLaunch(host: "local"), owner: "owner")
     try await registry.renameHosts(["local": "renamed-local"])

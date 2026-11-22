@@ -4,7 +4,7 @@ aelab is a self-hosted web interface and CLI for a personal lab. Manage local, S
 
 ## Architecture
 
-- One Swift executable provides the CLI, Hummingbird server and optional host daemon. Server and Daemon are modules compiled into that executable; Core shares operations and CPTY provides native terminal support. The web interface uses Svelte, TypeScript and xterm.js.
+- One Swift executable provides the CLI, Hummingbird server and optional host daemon. Server and Daemon are modules compiled into that executable; Core shares operations and the TermSpool Swift package manages native PTY processes. The web interface uses Svelte, TypeScript and xterm.js.
 - JSON configuration and small state files; no database or required host installation for SSH.
 - Snapshot compiled dashboard assets at server startup; checkout rebuilds take effect after a restart, keeping the running frontend/backend together.
 - Keep typed entity forms and shared editor behavior in dedicated frontend components; centralize configuration writes.
